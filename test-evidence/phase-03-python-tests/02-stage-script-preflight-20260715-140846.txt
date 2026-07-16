@@ -1,0 +1,417 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715140846
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 35988
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-03-python-tests\02-stage-script-preflight-20260715-140846.txt
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Stage script file ====="
+
+===== Stage script file =====
+PS D:\law-rag-project\law-rag-kb> Write-Host "ScriptExists:" (Test-Path $ScriptPath)
+ScriptExists: True
+PS D:\law-rag-project\law-rag-kb> Get-Item $ScriptPath |
+    Select-Object FullName, Length, LastWriteTime
+
+FullName                                                 Length LastWriteTime
+--------                                                 ------ -------------
+D:\law-rag-project\law-rag-kb\scripts\run_stage_tests.py  11648 2026/7/13 17:44:18
+
+
+PS D:\law-rag-project\law-rag-kb> Get-FileHash $ScriptPath -Algorithm SHA256 |
+    Select-Object Path, Algorithm, Hash
+
+Path                                                     Algorithm Hash
+----                                                     --------- ----
+D:\law-rag-project\law-rag-kb\scripts\run_stage_tests.py SHA256    CE2D60CD6BEA523EB5E5E105856C74015A88936BBEAB3E44B...
+
+
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Python syntax-only parse ====="
+
+===== Python syntax-only parse =====
+PS D:\law-rag-project\law-rag-kb> @'
+import ast
+from pathlib import Path
+
+path = Path(r".\scripts\run_stage_tests.py")
+source = path.read_text(encoding="utf-8-sig")
+tree = ast.parse(source, filename=str(path))
+
+print("SYNTAX_PARSE=PASS")
+print(f"SOURCE_LINE_COUNT={len(source.splitlines())}")
+
+function_names = [
+    node.name
+    for node in ast.walk(tree)
+    if isinstance(
+        node,
+        (ast.FunctionDef, ast.AsyncFunctionDef),
+    )
+]
+
+print(f"FUNCTION_COUNT={len(function_names)}")
+print("FUNCTION_NAMES=" + ",".join(function_names))
+'@ | & $Python -
+
+PS D:\law-rag-project\law-rag-kb> $SyntaxExitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Potential database and ingestion side effects ====="
+
+===== Potential database and ingestion side effects =====
+PS D:\law-rag-project\law-rag-kb> $SideEffectMatches = @(
+    Select-String `
+        -Path $ScriptPath `
+        -Pattern @(
+            "force",
+            "reingest",
+            "ingest",
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "chat_log",
+            "session_id",
+            "remove_object",
+            "delete_object",
+            "upload"
+        ) `
+        -CaseSensitive:$false
+)
+PS D:\law-rag-project\law-rag-kb> Write-Host "SideEffectMatchCount:" $SideEffectMatches.Count
+SideEffectMatchCount: 19
+PS D:\law-rag-project\law-rag-kb> $SideEffectMatches |
+    Select-Object LineNumber, Line |
+    Format-List
+
+
+LineNumber : 15
+Line       : sys.path.insert(0, str(_ROOT))
+
+LineNumber : 55
+Line       :         return db.execute(text("SELECT count(*) FROM oa.ai_chat_log")).scalar()
+
+LineNumber : 110
+Line       : cid = b["chat_log_id"]
+
+LineNumber : 118
+Line       : chk("C1d chat_log_id 非空", cid is not None, str(cid))
+
+LineNumber : 128
+Line       : # session_id 自动生成（uuid）
+
+LineNumber : 132
+Line       :     sid = db.execute(text("SELECT session_id FROM oa.ai_chat_log WHERE id=:i"), {"i": r.json()["chat_log_i
+             d"]}).scalar()
+
+LineNumber : 133
+Line       : chk("C3 session_id 自动生成(≥16 字符)", sid is not None and len(sid) >= 16, str(sid))
+
+LineNumber : 135
+Line       : # session_id 传入生效
+
+LineNumber : 136
+Line       : r = client.post("/chat", json={"question": "违约金", "session_id": "test-sess-123"})
+
+LineNumber : 139
+Line       :     sid2 = db.execute(text("SELECT session_id FROM oa.ai_chat_log WHERE id=:i"), {"i": r.json()["chat_log_
+             id"]}).scalar()
+
+LineNumber : 140
+Line       : chk("C3b session_id 传入生效", sid2 == "test-sess-123", str(sid2))
+
+LineNumber : 142
+Line       : # ai_chat_log 字段一致性（查 C1 那条）
+
+LineNumber : 150
+Line       :             "FROM oa.ai_chat_log WHERE id=:i"
+
+LineNumber : 163
+Line       : chk("C5 ai_chat_log 行数增长", chat_count() > chat_before, f"{chat_before} -> {chat_count()}")
+
+LineNumber : 193
+Line       : spec = importlib.util.spec_from_file_location("batch_ingest", Path(__file__).resolve().parent / "batch_ing
+             est.py")
+
+LineNumber : 202
+Line       : rec = bi._ingest_one(sub, f, bi._get_emp(), force=False)
+
+LineNumber : 208
+Line       : rec2 = bi._ingest_one(sub, f, bi._get_emp(), force=True)
+
+LineNumber : 209
+Line       : chk("D3 --force → success 重跑", rec2["status"] == "success", f"status={rec2['status']} chunks={rec2['chunks
+             ']}")
+
+LineNumber : 210
+Line       : chk("D4 force 后 doc_id 不变（复用）", rec2["doc_id"] == rec["doc_id"], f"{rec['doc_id']} vs {rec2['doc_id']}")
+
+
+
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== HTTP endpoint usage ====="
+
+===== HTTP endpoint usage =====
+PS D:\law-rag-project\law-rag-kb> $EndpointMatches = @(
+    Select-String `
+        -Path $ScriptPath `
+        -Pattern @(
+            "/health",
+            "/ready",
+            "/search",
+            "/chat",
+            "/documents",
+            "httpx",
+            "requests",
+            "TestClient"
+        ) `
+        -CaseSensitive:$false
+)
+PS D:\law-rag-project\law-rag-kb> Write-Host "EndpointMatchCount:" $EndpointMatches.Count
+EndpointMatchCount: 27
+PS D:\law-rag-project\law-rag-kb> $EndpointMatches |
+    Select-Object LineNumber, Line |
+    Format-List
+
+
+LineNumber : 19
+Line       : from fastapi.testclient import TestClient  # noqa: E402
+
+LineNumber : 27
+Line       : client = TestClient(app)
+
+LineNumber : 60
+Line       : h = client.get("/health").json()
+
+LineNumber : 61
+Line       : chk("A1 /health pg/minio/milvus 均 ok", all(h.get(k) == "ok" for k in ("pg", "minio", "milvus")), str(h))
+
+LineNumber : 72
+Line       : # =================== B. /search 检索链 ===================
+
+LineNumber : 73
+Line       : print("\n== B. /search 检索链 ==")
+
+LineNumber : 74
+Line       : r = client.post("/search", json={"query": "劳动合同试用期", "top_k": 5})
+
+LineNumber : 88
+Line       : chk("B2a 空 query → 422", client.post("/search", json={"query": ""}).status_code == 422)
+
+LineNumber : 89
+Line       : chk("B2b top_k=0 → 422", client.post("/search", json={"query": "x", "top_k": 0}).status_code == 422)
+
+LineNumber : 90
+Line       : chk("B2c top_k=51 → 422", client.post("/search", json={"query": "x", "top_k": 51}).status_code == 422)
+
+LineNumber : 91
+Line       : chk("B2d top_k=-1 → 422", client.post("/search", json={"query": "x", "top_k": -1}).status_code == 422)
+
+LineNumber : 92
+Line       : chk("B2e 缺 query → 422", client.post("/search", json={"top_k": 3}).status_code == 422)
+
+LineNumber : 95
+Line       : r = client.post("/search", json={"query": "法律", "doc_ids": [target], "top_k": 5})
+
+LineNumber : 99
+Line       : r = client.post("/search", json={"query": "法律", "doc_ids": [999999]})
+
+LineNumber : 102
+Line       : r = client.post("/search", json={"query": "诉讼时效", "top_k": 1})
+
+LineNumber : 105
+Line       : # =================== C. /chat 生成链 ===================
+
+LineNumber : 106
+Line       : print("\n== C. /chat 生成链 ==")
+
+LineNumber : 108
+Line       : r = client.post("/chat", json={"question": "诉讼时效是几年", "top_k": 3})
+
+LineNumber : 111
+Line       : chk("C1 /chat 200", r.status_code == 200, str(r.status_code))
+
+LineNumber : 125
+Line       : chk("C2a 空 question → 422", client.post("/chat", json={"question": ""}).status_code == 422)
+
+LineNumber : 126
+Line       : chk("C2b top_k=21 → 422", client.post("/chat", json={"question": "x", "top_k": 21}).status_code == 422)
+
+LineNumber : 129
+Line       : r = client.post("/chat", json={"question": "侵权赔偿范围"})
+
+LineNumber : 136
+Line       : r = client.post("/chat", json={"question": "违约金", "session_id": "test-sess-123"})
+
+LineNumber : 166
+Line       : r = client.post("/chat", json={"question": "法律", "top_k": 8})
+
+LineNumber : 173
+Line       :         "/chat",
+
+LineNumber : 183
+Line       :         "/chat",
+
+LineNumber : 223
+Line       :     r = client.post("/search", json={"query": q, "top_k": 3})
+
+
+
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Document identifiers and filters ====="
+
+===== Document identifiers and filters =====
+PS D:\law-rag-project\law-rag-kb> $DocumentMatches = @(
+    Select-String `
+        -Path $ScriptPath `
+        -Pattern @(
+            "doc_id",
+            "document_id",
+            "doc_ids",
+            "attachment_id",
+            "kb_document"
+        ) `
+        -CaseSensitive:$false
+)
+PS D:\law-rag-project\law-rag-kb> Write-Host "DocumentMatchCount:" $DocumentMatches.Count
+DocumentMatchCount: 22
+PS D:\law-rag-project\law-rag-kb> $DocumentMatches |
+    Select-Object LineNumber, Line |
+    Format-List
+
+
+LineNumber : 40
+Line       : def q_doc_ids() -> list[int]:
+
+LineNumber : 45
+Line       :         filter="doc_id >= 0",
+
+LineNumber : 46
+Line       :         output_fields=["doc_id"],
+
+LineNumber : 50
+Line       :     return sorted(set(r["doc_id"] for r in rows))
+
+LineNumber : 63
+Line       : doc_ids = q_doc_ids()
+
+LineNumber : 64
+Line       : chk("A2 kb_chunks 有数据", len(doc_ids) > 0, f"{len(doc_ids)} distinct doc_ids")
+
+LineNumber : 65
+Line       : chk("A2b 含批量入库新文档(id>=10)", any(d >= 10 for d in doc_ids), str(doc_ids))
+
+LineNumber : 68
+Line       :     succ = db.execute(text("SELECT count(*) FROM oa.kb_document WHERE embedding_status='success'")).scalar
+             ()
+
+LineNumber : 69
+Line       :     total = db.execute(text("SELECT count(*) FROM oa.kb_document")).scalar()
+
+LineNumber : 80
+Line       :     need = {"chunk_id", "doc_id", "doc_title", "source", "chunk_idx", "text", "score"}
+
+LineNumber : 94
+Line       : target = doc_ids[0]
+
+LineNumber : 95
+Line       : r = client.post("/search", json={"query": "法律", "doc_ids": [target], "top_k": 5})
+
+LineNumber : 96
+Line       : chk("B3 doc_ids 过滤仅返回该 doc", all(x["doc_id"] == target for x in r.json()["hits"]),
+
+LineNumber : 97
+Line       :     f"target={target} got={set(x['doc_id'] for x in r.json()['hits'])}")
+
+LineNumber : 99
+Line       : r = client.post("/search", json={"query": "法律", "doc_ids": [999999]})
+
+LineNumber : 100
+Line       : chk("B4 不存在 doc_ids → 空结果", r.json()["total"] == 0, str(r.json()["total"]))
+
+LineNumber : 122
+Line       :     chk("C1f ref 字段完整", {"ref_id", "chunk_id", "doc_id", "doc_title", "chunk_idx", "source", "score"} <= s
+             et(b["refs"][0]),
+
+LineNumber : 200
+Line       :     cnt_before = db.execute(text("SELECT count(*) FROM oa.kb_document")).scalar()
+
+LineNumber : 204
+Line       :     cnt_after = db.execute(text("SELECT count(*) FROM oa.kb_document")).scalar()
+
+LineNumber : 205
+Line       : chk("D1 已入库文件默认 → skipped", rec["status"] == "skipped", f"status={rec['status']} doc_id={rec['doc_id']}")
+
+LineNumber : 206
+Line       : chk("D2 幂等：kb_document 行数不变", cnt_after == cnt_before, f"{cnt_before} -> {cnt_after}")
+
+LineNumber : 210
+Line       : chk("D4 force 后 doc_id 不变（复用）", rec2["doc_id"] == rec["doc_id"], f"{rec['doc_id']} vs {rec2['doc_id']}")
+
+
+
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== External model call indicators ====="
+
+===== External model call indicators =====
+PS D:\law-rag-project\law-rag-kb> $ModelCallMatches = @(
+    Select-String `
+        -Path $ScriptPath `
+        -Pattern @(
+            "LLM",
+            "Qwen",
+            "OpenAI",
+            "api_base",
+            "generate",
+            "completion"
+        ) `
+        -CaseSensitive:$false
+)
+PS D:\law-rag-project\law-rag-kb> Write-Host "ModelCallMatchCount:" $ModelCallMatches.Count
+ModelCallMatchCount: 7
+PS D:\law-rag-project\law-rag-kb> $ModelCallMatches |
+    Select-Object LineNumber, Line |
+    Format-List
+
+
+LineNumber : 1
+Line       : """阶段 3-7 集成测试：检索、真实 LLM 生成、引用/日志、批量入库、法条精度与拒答。
+
+LineNumber : 112
+Line       : if settings.llm_provider == "stub":
+
+LineNumber : 115
+Line       :     chk("C1b 真实 LLM 非 Stub 答案", "Stub" not in b["answer"] and bool(b["answer"].strip()), b["answer"][:45])
+
+LineNumber : 116
+Line       :     chk("C1b2 真实 LLM 答案含引用编号", "[1]" in b["answer"], b["answer"][:80])
+
+LineNumber : 170
+Line       : # 真实 LLM 的精确法条引用与无依据拒答（Stub 环境跳过外部生成质量断言）
+
+LineNumber : 171
+Line       : if settings.llm_provider != "stub":
+
+LineNumber : 178
+Line       :     chk("C7 Qwen 法律问答 200", r.status_code == 200, str(r.status_code))
+
+
+
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Preflight exit code ====="
+
+===== Preflight exit code =====
+PS D:\law-rag-project\law-rag-kb> Write-Host "SyntaxExitCode:" $SyntaxExitCode
+SyntaxExitCode: 0
+PS D:\law-rag-project\law-rag-kb> Write-Host "IMPORTANT: run_stage_tests.py was inspected but not executed."
+IMPORTANT: run_stage_tests.py was inspected but not executed.
+PS D:\law-rag-project\law-rag-kb> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715140847
+**********************

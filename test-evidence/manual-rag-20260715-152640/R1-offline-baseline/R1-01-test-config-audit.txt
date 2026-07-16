@@ -1,0 +1,255 @@
+﻿===== R1-01 Python 测试配置只读审计 =====
+测试时间：2026-07-15 15:26:40 +08:00
+证据目录：D:\law-rag-project\test-evidence\manual-rag-20260715-152640
+
+===== 1. 测试配置文件 =====
+[NOT FOUND] pytest.ini
+
+[NOT FOUND] pyproject.toml
+
+[NOT FOUND] setup.cfg
+
+[NOT FOUND] tox.ini
+
+[FOUND] requirements.txt
+----- requirements.txt 内容 -----
+# law-rag-kb 依赖
+# 里程碑 1：轻量连通依赖（pin 版本对齐 law-rag-service/requirements-lock.txt）
+# 安装：pip install -r requirements.txt
+
+# Web 框架
+fastapi==0.139.0
+uvicorn[standard]==0.50.2
+httpx2==2.0.0              # Starlette 1.3 TestClient 首选后端；避免回退 httpx 的弃用警告
+
+# 向量库（pymilvus 连 localhost:19530）
+pymilvus==2.6.10
+
+# 对象存储（读 law-firm-files 文档原件）
+minio==7.2.20
+
+# 关系库（只读 oa schema）
+psycopg[binary]==3.3.4
+SQLAlchemy==2.0.51
+
+# 配置
+pydantic-settings==2.14.2
+
+# ============================================================
+# 阶段 2 入库链依赖（已启用）
+# ============================================================
+PyMuPDF==1.26.3           # PDF 文本块、嵌入图片与扫描页渲染
+python-docx==1.2.0        # DOCX 解析
+Pillow==11.3.0            # 图片尺寸、格式与空白/纯色预筛
+FlagEmbedding==1.2.10     # BGE-M3 dense+sparse；1.4.0 重构后与 transformers 4.x/5.x 均不兼容（dtype/return_colbert），用经典 1.2.x
+transformers==4.44.2      # pin：FlagEmbedding 1.2.10 实测兼容版（4.46+ 的 dtype 迁移破坏 XLMRobertaModel 加载，5.x 的 tokenizer.pad 拒绝 return_colbert）
+numpy                     # FlagEmbedding 间接依赖，显式声明避免环境不一致
+openai==2.45.0            # OpenAI 兼容 LLM 客户端（当前接阿里云百炼 qwen3.7-plus）
+# modelscope              # 国内下载 BGE-M3（本机 HF/hf-mirror 不可达）：pip install modelscope 后用 snapshot_download('BAAI/bge-m3')
+
+# ============================================================
+# 以下依赖推迟到对应里程碑再装（按需启用）
+# ============================================================
+# python-multipart          # 文件上传（入库按 doc_id 触发，不需要）
+# unstructured              # 更多格式文档解析（重，推迟）
+# 阶段 3 检索链：reranker 复用 FlagEmbedding.FlagReranker（已含于上方 FlagEmbedding==1.2.10），无需 sentence-transformers
+#   ——避免 sentence-transformers 5.x 与 transformers==4.44.2 的版本冲突破坏入库链
+# langgraph                 # 后续多轮/Agent 增强再上状态机（当前阶段 4 为纯函数编排）
+----- requirements.txt 结束 -----
+
+[NOT FOUND] requirements-dev.txt
+
+===== 2. tests 目录文件清单 =====
+tests\__init__.py
+tests\__pycache__\__init__.cpython-311.pyc
+tests\__pycache__\test_api.cpython-311.pyc
+tests\__pycache__\test_api.cpython-311-pytest-9.0.3.pyc
+tests\__pycache__\test_chunker.cpython-311.pyc
+tests\__pycache__\test_chunker.cpython-311-pytest-9.0.3.pyc
+tests\__pycache__\test_document_markdown.cpython-311.pyc
+tests\__pycache__\test_document_markdown.cpython-311-pytest-9.0.3.pyc
+tests\__pycache__\test_llm.cpython-311.pyc
+tests\__pycache__\test_llm.cpython-311-pytest-9.0.3.pyc
+tests\__pycache__\test_markdown_pipeline.cpython-311.pyc
+tests\__pycache__\test_markdown_pipeline.cpython-311-pytest-9.0.3.pyc
+tests\__pycache__\test_multimodal_ingest.cpython-311.pyc
+tests\__pycache__\test_multimodal_ingest.cpython-311-pytest-9.0.3.pyc
+tests\__pycache__\test_reranker.cpython-311.pyc
+tests\__pycache__\test_reranker.cpython-311-pytest-9.0.3.pyc
+tests\__pycache__\test_retrieve.cpython-311.pyc
+tests\__pycache__\test_retrieve.cpython-311-pytest-9.0.3.pyc
+tests\__pycache__\test_security.cpython-311.pyc
+tests\__pycache__\test_security.cpython-311-pytest-9.0.3.pyc
+tests\fixtures\vl_eval\README.md
+tests\test_api.py
+tests\test_chunker.py
+tests\test_document_markdown.py
+tests\test_llm.py
+tests\test_markdown_pipeline.py
+tests\test_multimodal_ingest.py
+tests\test_reranker.py
+tests\test_retrieve.py
+tests\test_security.py
+
+测试文件数量：30
+
+===== 3. 云端服务与真实网络调用关键词 =====
+
+[MATCH] qwen3\.7
+tests\test_llm.py:18: "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+tests\test_llm.py:29: self.assertEqual(request["model"], "qwen3.7-plus")
+tests\test_llm.py:44: "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+tests\test_llm.py:56: "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+
+[MATCH] qwen3-vl
+tests\test_multimodal_ingest.py:203: # 真实根因：qwen3-vl-plus 偶发用 Unicode 弯引号 “ ” 包裹个别键，替代 ASCII 双引号，
+
+[MATCH] qwen.*plus
+tests\test_llm.py:18: "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+tests\test_llm.py:29: self.assertEqual(request["model"], "qwen3.7-plus")
+tests\test_llm.py:44: "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+tests\test_llm.py:56: "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+tests\test_multimodal_ingest.py:203: # 真实根因：qwen3-vl-plus 偶发用 Unicode 弯引号 “ ” 包裹个别键，替代 ASCII 双引号，
+[NO MATCH] dashscope
+[NO MATCH] DashScope
+[NO MATCH] api\.dashscope
+[NO MATCH] OpenAI\s*\(
+[NO MATCH] AsyncOpenAI\s*\(
+[NO MATCH] httpx\.
+[NO MATCH] requests\.
+[NO MATCH] urllib
+[NO MATCH] aiohttp
+[NO MATCH] LLM_API_KEY
+[NO MATCH] DASHSCOPE_API_KEY
+[NO MATCH] OPENAI_API_KEY
+
+[MATCH] VL_API_KEY
+tests\test_multimodal_ingest.py:246: self._original_key = settings.vl_api_key
+tests\test_multimodal_ingest.py:247: settings.vl_api_key = "test-key"
+tests\test_multimodal_ingest.py:250: settings.vl_api_key = self._original_key
+
+===== 4. Mock、Stub 与隔离机制关键词 =====
+[NO MATCH] monkeypatch
+
+[MATCH] unittest\.mock
+tests\test_api.py:2: from unittest.mock import patch
+tests\test_document_markdown.py:4: from unittest.mock import patch
+tests\test_llm.py:3: from unittest.mock import patch
+tests\test_markdown_pipeline.py:4: from unittest.mock import MagicMock, patch
+tests\test_multimodal_ingest.py:4: from unittest.mock import patch
+tests\test_reranker.py:2: from unittest.mock import MagicMock, patch
+tests\test_retrieve.py:2: from unittest.mock import patch
+tests\test_security.py:2: from unittest.mock import patch
+
+[MATCH] \bmock\b
+tests\test_api.py:2: from unittest.mock import patch
+tests\test_document_markdown.py:4: from unittest.mock import patch
+tests\test_llm.py:3: from unittest.mock import patch
+tests\test_markdown_pipeline.py:4: from unittest.mock import MagicMock, patch
+tests\test_multimodal_ingest.py:4: from unittest.mock import patch
+tests\test_reranker.py:2: from unittest.mock import MagicMock, patch
+tests\test_retrieve.py:2: from unittest.mock import patch
+tests\test_security.py:2: from unittest.mock import patch
+
+[MATCH] \bpatch\b
+tests\test_api.py:2: from unittest.mock import patch
+tests\test_api.py:32: @patch("app.api.health._check_model_path", return_value="ok")
+tests\test_api.py:33: @patch("app.api.health._check_milvus", return_value="ok")
+tests\test_api.py:34: @patch("app.api.health._check_minio", return_value="ok")
+tests\test_api.py:35: @patch("app.api.health._check_pg", return_value="ok")
+tests\test_api.py:46: @patch("app.api.health._check_model_path", return_value="missing")
+tests\test_api.py:47: @patch("app.api.health._check_milvus", return_value="ok")
+tests\test_api.py:48: @patch("app.api.health._check_minio", return_value="ok")
+tests\test_api.py:49: @patch("app.api.health._check_pg", return_value="ok")
+tests\test_api.py:60: @patch("app.api.search.retrieve.search")
+tests\test_api.py:88: @patch("app.api.search.retrieve.search")
+tests\test_api.py:114: @patch("app.api.chat.chat_service.chat")
+tests\test_api.py:150: @patch("app.api.chat.chat_service.chat")
+tests\test_api.py:164: @patch("app.api.documents.ingest_service.ingest_document")
+tests\test_api.py:173: @patch("app.api.documents.ingest_service.get_document_status", return_value=None)
+tests\test_api.py:180: @patch("app.api.documents.ingest_service.ingest_document")
+tests\test_api.py:190: @patch("app.api.documents.ingest_service.ingest_document")
+tests\test_api.py:205: @patch("app.api.documents.ingest_service.ingest_document")
+tests\test_document_markdown.py:4: from unittest.mock import patch
+tests\test_document_markdown.py:40: @patch("app.core.storage.get_minio_client")
+tests\test_document_markdown.py:57: with patch.object(llm, "get_llm") as glm:
+tests\test_document_markdown.py:65: with patch.object(llm, "get_llm") as glm:
+tests\test_document_markdown.py:73: with patch.object(llm, "get_llm") as glm:
+tests\test_document_markdown.py:93: with patch("app.ingest.service.minio_presigned_url", return_value="https://minio/p.png"):
+tests\test_document_markdown.py:116: with patch("app.ingest.service.minio_presigned_url", side_effect=RuntimeError("minio down")):
+tests\test_document_markdown.py:135: @patch("app.ingest.service._load_kept_images", return_value=[])
+tests\test_document_markdown.py:136: @patch("app.ingest.service._load_document")
+tests\test_document_markdown.py:147: @patch("app.ingest.service._load_kept_images", return_value=[])
+tests\test_document_markdown.py:148: @patch("app.ingest.service._load_document", return_value=None)
+tests\test_document_markdown.py:159: @patch("app.ingest.service.build_document_markdown")
+...共 95 处，仅显示前 30 处
+
+[MATCH] MagicMock
+tests\test_markdown_pipeline.py:4: from unittest.mock import MagicMock, patch
+tests\test_markdown_pipeline.py:299: client = MagicMock()
+tests\test_reranker.py:2: from unittest.mock import MagicMock, patch
+tests\test_reranker.py:12: model = MagicMock()
+[NO MATCH] AsyncMock
+[NO MATCH] stub
+[NO MATCH] fake
+[NO MATCH] respx
+[NO MATCH] responses
+[NO MATCH] pytest_httpx
+
+[MATCH] TestClient
+tests\test_api.py:4: from fastapi.testclient import TestClient
+tests\test_api.py:16: cls.client = TestClient(app)
+tests\test_document_markdown.py:6: from fastapi.testclient import TestClient
+tests\test_document_markdown.py:157: self.client = TestClient(app)
+tests\test_security.py:4: from fastapi.testclient import TestClient
+tests\test_security.py:115: cls.client = TestClient(app)
+[NO MATCH] dependency_overrides
+
+===== 5. pytest 标记与跳过条件 =====
+[NO MATCH] pytest\.mark\.
+
+[MATCH] skip
+tests\test_api.py:191: def test_successful_document_without_force_returns_skipped(self, ingest_mock) -> None:
+tests\test_api.py:194: "skipped",
+tests\test_api.py:202: self.assertEqual(response.json()["status"], "skipped")
+[NO MATCH] skipif
+[NO MATCH] xfail
+[NO MATCH] integration
+[NO MATCH] online
+[NO MATCH] network
+[NO MATCH] slow
+
+[MATCH] \bvl\b
+tests\test_markdown_pipeline.py:1: """统一 Markdown → draft 切片 → VL → 最终切片管线测试。"""
+tests\test_markdown_pipeline.py:319: patch.object(service, "_analyze_images_after_draft", side_effect=mark("vl", [analysis])),
+tests\test_markdown_pipeline.py:331: self.assertEqual(events, ["build", "split", "vl", "enrich", "finalize", "embedding"])
+tests\test_multimodal_ingest.py:11: from app.ingest import cleaner, image_filter, parser, vl
+tests\test_multimodal_ingest.py:130: """直接测试 vl._parse_payload 对各种响应包装与轻微格式问题的鲁棒性。"""
+tests\test_multimodal_ingest.py:142: payload, meta = vl._parse_payload(json.dumps(self._DIAGRAM), finish_reason="stop")
+tests\test_multimodal_ingest.py:150: payload, _ = vl._parse_payload(content, finish_reason="stop")
+tests\test_multimodal_ingest.py:158: payload, _ = vl._parse_payload(content, finish_reason="stop")
+tests\test_multimodal_ingest.py:172: payload, meta = vl._parse_payload(content, finish_reason="stop")
+tests\test_multimodal_ingest.py:183: payload, meta = vl._parse_payload(content, finish_reason="stop")
+tests\test_multimodal_ingest.py:189: # VL 描述多步流程时常把字面换行写进字符串值，导致 JSONDecodeError。
+tests\test_multimodal_ingest.py:197: payload, meta = vl._parse_payload(content, finish_reason="stop")
+tests\test_multimodal_ingest.py:203: # 真实根因：qwen3-vl-plus 偶发用 Unicode 弯引号 “ ” 包裹个别键，替代 ASCII 双引号，
+tests\test_multimodal_ingest.py:211: payload, meta = vl._parse_payload(content, finish_reason="stop")
+tests\test_multimodal_ingest.py:224: payload, _ = vl._parse_payload(content, finish_reason="stop")
+tests\test_multimodal_ingest.py:235: with self.assertRaises(vl._PayloadParseError) as ctx:
+tests\test_multimodal_ingest.py:236: vl._parse_payload(content, finish_reason="length")
+tests\test_multimodal_ingest.py:252: @patch("app.ingest.vl._request")
+tests\test_multimodal_ingest.py:265: result = vl.analyze(_asset(_png(text="logo")), doc_title="测试文档")
+tests\test_multimodal_ingest.py:270: @patch("app.ingest.vl._request")
+tests\test_multimodal_ingest.py:283: result = vl.analyze(_asset(_png(text="seal")), doc_title="合同")
+tests\test_multimodal_ingest.py:288: @patch("app.ingest.vl._request")
+tests\test_multimodal_ingest.py:302: result = vl.analyze(_asset(_png(text="diagram")), doc_title="合同")
+tests\test_multimodal_ingest.py:307: @patch("app.ingest.vl._request")
+tests\test_multimodal_ingest.py:323: result = vl.analyze(_asset(_png(text="other")), doc_title="文档")
+tests\test_multimodal_ingest.py:328: @patch("app.ingest.vl._request")
+tests\test_multimodal_ingest.py:337: with self.assertRaises(vl.VisionClientError) as ctx:
+tests\test_multimodal_ingest.py:338: vl.analyze(_asset(_png(text="diagram")), doc_title="文档")
+tests\test_multimodal_ingest.py:348: # 单张图片 VL 失败时，正文仍应正常切片入库（降级机制）。
+tests\test_multimodal_ingest.py:350: failed = vl.failed_analysis(asset, vl.VisionClientError("boom"))
+[NO MATCH] external
+
+===== 6. pytest 收集测试，不执行测试 =====

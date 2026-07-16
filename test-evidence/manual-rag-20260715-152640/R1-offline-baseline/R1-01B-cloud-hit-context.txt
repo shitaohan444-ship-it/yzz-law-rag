@@ -1,0 +1,225 @@
+﻿===== R1-01B 云端相关命中上下文 =====
+测试时间：2026-07-15 15:31:06 +08:00
+命中数量：8
+
+============================================================
+命中 1 / 8
+文件：tests\test_llm.py
+行号：18
+命中内容："https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+------------------------------------------------------------
+        8: 
+        9: class OpenAICompatibleLlmTests(unittest.TestCase):
+       10:     @patch("openai.OpenAI")
+       11:     def test_qwen_request_uses_limits_and_disables_thinking(self, openai_mock) -> None:
+       12:         client = openai_mock.return_value
+       13:         client.chat.completions.create.return_value = SimpleNamespace(
+       14:             choices=[SimpleNamespace(message=SimpleNamespace(content="依据如下。[1]"))]
+       15:         )
+       16: 
+       17:         answer = _call_openai_compat(
+>>>    18:             "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+       19:         )
+       20: 
+       21:         self.assertEqual(answer, "依据如下。[1]")
+       22:         openai_mock.assert_called_once_with(
+       23:             base_url="https://example.invalid/v1",
+       24:             api_key="secret",
+       25:             timeout=settings.llm_timeout_seconds,
+       26:             max_retries=settings.llm_max_retries,
+       27:         )
+       28:         request = client.chat.completions.create.call_args.kwargs
+
+============================================================
+命中 2 / 8
+文件：tests\test_llm.py
+行号：29
+命中内容：self.assertEqual(request["model"], "qwen3.7-plus")
+------------------------------------------------------------
+       19:         )
+       20: 
+       21:         self.assertEqual(answer, "依据如下。[1]")
+       22:         openai_mock.assert_called_once_with(
+       23:             base_url="https://example.invalid/v1",
+       24:             api_key="secret",
+       25:             timeout=settings.llm_timeout_seconds,
+       26:             max_retries=settings.llm_max_retries,
+       27:         )
+       28:         request = client.chat.completions.create.call_args.kwargs
+>>>    29:         self.assertEqual(request["model"], "qwen3.7-plus")
+       30:         self.assertEqual(request["max_tokens"], settings.llm_max_tokens)
+       31:         self.assertEqual(
+       32:             request["extra_body"], {"enable_thinking": settings.llm_enable_thinking}
+       33:         )
+       34: 
+       35:     @patch("openai.OpenAI")
+       36:     def test_empty_model_response_is_an_error(self, openai_mock) -> None:
+       37:         client = openai_mock.return_value
+       38:         client.chat.completions.create.return_value = SimpleNamespace(
+       39:             choices=[SimpleNamespace(message=SimpleNamespace(content="  "))]
+
+============================================================
+命中 3 / 8
+文件：tests\test_llm.py
+行号：44
+命中内容："https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+------------------------------------------------------------
+       34: 
+       35:     @patch("openai.OpenAI")
+       36:     def test_empty_model_response_is_an_error(self, openai_mock) -> None:
+       37:         client = openai_mock.return_value
+       38:         client.chat.completions.create.return_value = SimpleNamespace(
+       39:             choices=[SimpleNamespace(message=SimpleNamespace(content="  "))]
+       40:         )
+       41: 
+       42:         with self.assertRaisesRegex(LLMServiceError, "returned empty content"):
+       43:             _call_openai_compat(
+>>>    44:                 "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+       45:             )
+       46: 
+       47:     @patch("openai.OpenAI")
+       48:     def test_provider_exception_is_sanitized(self, openai_mock) -> None:
+       49:         client = openai_mock.return_value
+       50:         client.chat.completions.create.side_effect = TimeoutError("contains internals")
+       51: 
+       52:         with self.assertRaisesRegex(
+       53:             LLMServiceError, r"provider request failed \(TimeoutError\)"
+       54:         ) as caught:
+
+============================================================
+命中 4 / 8
+文件：tests\test_llm.py
+行号：56
+命中内容："https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+------------------------------------------------------------
+       46: 
+       47:     @patch("openai.OpenAI")
+       48:     def test_provider_exception_is_sanitized(self, openai_mock) -> None:
+       49:         client = openai_mock.return_value
+       50:         client.chat.completions.create.side_effect = TimeoutError("contains internals")
+       51: 
+       52:         with self.assertRaisesRegex(
+       53:             LLMServiceError, r"provider request failed \(TimeoutError\)"
+       54:         ) as caught:
+       55:             _call_openai_compat(
+>>>    56:                 "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+       57:             )
+       58: 
+       59:         self.assertNotIn("contains internals", str(caught.exception))
+       60: 
+       61: 
+       62: if __name__ == "__main__":
+       63:     unittest.main()
+
+============================================================
+命中 5 / 8
+文件：tests\test_multimodal_ingest.py
+行号：203
+命中内容：# 真实根因：qwen3-vl-plus 偶发用 Unicode 弯引号 “ ” 包裹个别键，替代 ASCII 双引号，
+------------------------------------------------------------
+      193:             '"description":"第一步：协商\n第二步：调解\n第三步：仲裁",'
+      194:             '"extracted_text":"","filter_reason":""}'
+      195:         )
+      196: 
+      197:         payload, meta = vl._parse_payload(content, finish_reason="stop")
+      198: 
+      199:         self.assertTrue(meta["repaired"])
+      200:         self.assertEqual(payload["description"], "第一步：协商\n第二步：调解\n第三步：仲裁")
+      201: 
+      202:     def test_smart_quote_delimiters_are_normalized(self) -> None:
+>>>   203:         # 真实根因：qwen3-vl-plus 偶发用 Unicode 弯引号 “ ” 包裹个别键，替代 ASCII 双引号，
+      204:         # 导致 json.loads 报 "Expecting property name enclosed in double quotes"。
+      205:         content = (
+      206:             '{"category":"diagram","keep_for_rag":true,"confidence":0.95,'
+      207:             '"description":"合同争议处理流程图","extracted_text":"协商→调解→仲裁",'
+      208:             "“filter_reason”:" + '""}'
+      209:         )
+      210: 
+      211:         payload, meta = vl._parse_payload(content, finish_reason="stop")
+      212: 
+      213:         self.assertEqual(payload["category"], "diagram")
+
+============================================================
+命中 6 / 8
+文件：tests\test_multimodal_ingest.py
+行号：246
+命中内容：self._original_key = settings.vl_api_key
+------------------------------------------------------------
+      236:             vl._parse_payload(content, finish_reason="length")
+      237: 
+      238:         meta = ctx.exception.meta
+      239:         self.assertFalse(meta["balanced"])
+      240:         self.assertEqual(meta["finish_reason"], "length")
+      241:         self.assertEqual(meta["reason"], "json_decode_failed")
+      242: 
+      243: 
+      244: class VisionPolicyTests(unittest.TestCase):
+      245:     def setUp(self) -> None:
+>>>   246:         self._original_key = settings.vl_api_key
+      247:         settings.vl_api_key = "test-key"
+      248: 
+      249:     def tearDown(self) -> None:
+      250:         settings.vl_api_key = self._original_key
+      251: 
+      252:     @patch("app.ingest.vl._request")
+      253:     def test_high_confidence_logo_is_not_searchable(self, request_mock) -> None:
+      254:         request_mock.return_value = _vl_response(
+      255:             {
+      256:                 "category": "decorative_logo",
+
+============================================================
+命中 7 / 8
+文件：tests\test_multimodal_ingest.py
+行号：247
+命中内容：settings.vl_api_key = "test-key"
+------------------------------------------------------------
+      237: 
+      238:         meta = ctx.exception.meta
+      239:         self.assertFalse(meta["balanced"])
+      240:         self.assertEqual(meta["finish_reason"], "length")
+      241:         self.assertEqual(meta["reason"], "json_decode_failed")
+      242: 
+      243: 
+      244: class VisionPolicyTests(unittest.TestCase):
+      245:     def setUp(self) -> None:
+      246:         self._original_key = settings.vl_api_key
+>>>   247:         settings.vl_api_key = "test-key"
+      248: 
+      249:     def tearDown(self) -> None:
+      250:         settings.vl_api_key = self._original_key
+      251: 
+      252:     @patch("app.ingest.vl._request")
+      253:     def test_high_confidence_logo_is_not_searchable(self, request_mock) -> None:
+      254:         request_mock.return_value = _vl_response(
+      255:             {
+      256:                 "category": "decorative_logo",
+      257:                 "keep_for_rag": True,
+
+============================================================
+命中 8 / 8
+文件：tests\test_multimodal_ingest.py
+行号：250
+命中内容：settings.vl_api_key = self._original_key
+------------------------------------------------------------
+      240:         self.assertEqual(meta["finish_reason"], "length")
+      241:         self.assertEqual(meta["reason"], "json_decode_failed")
+      242: 
+      243: 
+      244: class VisionPolicyTests(unittest.TestCase):
+      245:     def setUp(self) -> None:
+      246:         self._original_key = settings.vl_api_key
+      247:         settings.vl_api_key = "test-key"
+      248: 
+      249:     def tearDown(self) -> None:
+>>>   250:         settings.vl_api_key = self._original_key
+      251: 
+      252:     @patch("app.ingest.vl._request")
+      253:     def test_high_confidence_logo_is_not_searchable(self, request_mock) -> None:
+      254:         request_mock.return_value = _vl_response(
+      255:             {
+      256:                 "category": "decorative_logo",
+      257:                 "keep_for_rag": True,
+      258:                 "confidence": 0.98,
+      259:                 "description": "页眉品牌标志",
+      260:                 "extracted_text": "",
+

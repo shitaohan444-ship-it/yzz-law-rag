@@ -1,0 +1,482 @@
+﻿[
+    {
+        "Target":  "Python RAG",
+        "Key":  "CHAT_MAX_CONTEXT_CHARS",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "CHAT_TOP_K",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "CHUNK_BY_ARTICLE",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "CHUNK_OVERLAP",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "CHUNK_SIZE",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "DENSE_WEIGHT",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "EMBEDDING_BATCH_SIZE",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "EMBEDDING_MAX_SEQ_LEN",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "EMBEDDING_MODEL",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "HNSW_EF",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "HYBRID_RANKER",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "KB_API_PORT",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "LLM_ENABLE_THINKING",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "LLM_MAX_RETRIES",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "LLM_MAX_TOKENS",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "LLM_PROVIDER",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "LLM_TEMPERATURE",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "LLM_TIMEOUT_SECONDS",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MILVUS_COLLECTION",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MILVUS_HOST",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MILVUS_PORT",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MINIO_ACCESS_KEY",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MINIO_BUCKET",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MINIO_ENDPOINT",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MINIO_PORT",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MINIO_SECRET_KEY",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MINIO_USE_SSL",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "MODEL_DEVICE",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "PDF_RENDER_SCALE",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "PG_SCHEMA",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "POSTGRES_DB",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "POSTGRES_HOST",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "POSTGRES_PASSWORD",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "POSTGRES_PORT",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "POSTGRES_USER",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "RERANK_BATCH_SIZE",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "RERANK_MIN_SCORE",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "RERANK_TOP_K",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "RERANKER_MODEL",
+        "Status":  "SET",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "RRF_K",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "SCAN_PAGE_MIN_TEXT_CHARS",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "SEARCH_TIMING_ENABLED",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "SEARCH_TOP_K",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "SPARSE_WEIGHT",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_API_BASE",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_API_KEY",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_CONCURRENCY",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_ENABLED",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_FILTER_CONFIDENCE",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_MAX_OUTPUT_TOKENS",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_MAX_RETRIES",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_MODEL",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_NEARBY_TEXT_CHARS",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_PROMPT_VERSION",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "VL_TIMEOUT_SECONDS",
+        "Status":  "MISSING",
+        "Source":  "example-baseline"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "LLM_API_BASE",
+        "Status":  "SET",
+        "Source":  "extra-in-env"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "LLM_API_KEY",
+        "Status":  "SET",
+        "Source":  "extra-in-env"
+    },
+    {
+        "Target":  "Python RAG",
+        "Key":  "LLM_MODEL",
+        "Status":  "SET",
+        "Source":  "extra-in-env"
+    },
+    {
+        "Target":  "Node API",
+        "Key":  "DATABASE_URL",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Node API",
+        "Key":  "MINIO_ACCESS_KEY",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Node API",
+        "Key":  "MINIO_BUCKET",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Node API",
+        "Key":  "MINIO_ENDPOINT",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Node API",
+        "Key":  "MINIO_PORT",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Node API",
+        "Key":  "MINIO_SECRET_KEY",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Node API",
+        "Key":  "MINIO_USE_SSL",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Node API",
+        "Key":  "NODE_ENV",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Node API",
+        "Key":  "PORT",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "ENV",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "MINIO_API_PORT",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "MINIO_BUCKET_NAME",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "MINIO_CONSOLE_PORT",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "MINIO_HOST",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "MINIO_ROOT_PASSWORD",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "MINIO_ROOT_USER",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "MINIO_SECURE",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "POSTGRES_DB",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "POSTGRES_PASSWORD",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "POSTGRES_PORT",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "POSTGRES_USER",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    },
+    {
+        "Target":  "Infrastructure",
+        "Key":  "PROJECT_NAME",
+        "Status":  "SET",
+        "Source":  "no-example-baseline"
+    }
+]

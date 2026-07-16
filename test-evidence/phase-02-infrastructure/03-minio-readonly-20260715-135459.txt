@@ -1,0 +1,170 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715135459
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 40304
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-02-infrastructure\03-minio-readonly-20260715-135459.txt
+PS D:\law-rag-project> Write-Host "`n===== MinIO server version ====="
+
+===== MinIO server version =====
+PS D:\law-rag-project> docker exec law-rag-minio minio --version
+minio version RELEASE.2024-12-18T13-15-44Z (commit-id=16f8cf1c52f0a77eeb8f7565aaf7f7df12454583)
+Runtime: go1.23.4 linux/amd64
+License: GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html
+Copyright: 2015-2024 MinIO, Inc.
+PS D:\law-rag-project> $MinioVersionExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== MinIO HTTP health endpoints ====="
+
+===== MinIO HTTP health endpoints =====
+PS D:\law-rag-project> $LiveStatus = 0
+PS D:\law-rag-project> $ReadyStatus = 0
+PS D:\law-rag-project> try {
+    $LiveResponse = Invoke-WebRequest `
+        -Uri "http://127.0.0.1:9000/minio/health/live" `
+        -Method Get `
+        -UseBasicParsing `
+        -TimeoutSec 10
+
+    $LiveStatus = $LiveResponse.StatusCode
+    Write-Host "LiveStatusCode:" $LiveStatus
+}
+catch {
+    Write-Host "LiveStatusCode: REQUEST_FAILED"
+    Write-Host "LiveErrorType:" $_.Exception.GetType().Name
+}
+LiveStatusCode: 200
+PS D:\law-rag-project> try {
+    $ReadyResponse = Invoke-WebRequest `
+        -Uri "http://127.0.0.1:9000/minio/health/ready" `
+        -Method Get `
+        -UseBasicParsing `
+        -TimeoutSec 10
+
+    $ReadyStatus = $ReadyResponse.StatusCode
+    Write-Host "ReadyStatusCode:" $ReadyStatus
+}
+catch {
+    Write-Host "ReadyStatusCode: REQUEST_FAILED"
+    Write-Host "ReadyErrorType:" $_.Exception.GetType().Name
+}
+ReadyStatusCode: 200
+PS D:\law-rag-project> Write-Host "`n===== Authenticated read-only bucket audit ====="
+
+===== Authenticated read-only bucket audit =====
+PS D:\law-rag-project> $MinioAudit = @'
+import sys
+from urllib.parse import urlparse
+
+from minio import Minio
+from minio.error import S3Error
+
+from app.core.config import settings
+
+
+def secret_value(value):
+    if hasattr(value, "get_secret_value"):
+        return value.get_secret_value()
+    return str(value)
+
+
+try:
+    configured_endpoint = str(settings.minio_endpoint).strip()
+    configured_port = int(settings.minio_port)
+    secure = bool(settings.minio_use_ssl)
+
+    if "://" in configured_endpoint:
+        parsed = urlparse(configured_endpoint)
+        host = parsed.hostname
+        port = parsed.port or configured_port
+    else:
+        host_part = configured_endpoint.rstrip("/")
+
+        if ":" in host_part:
+            host, port_text = host_part.rsplit(":", 1)
+            port = int(port_text)
+        else:
+            host = host_part
+            port = configured_port
+
+    endpoint = f"{host}:{port}"
+
+    client = Minio(
+        endpoint,
+        access_key=secret_value(settings.minio_access_key),
+        secret_key=secret_value(settings.minio_secret_key),
+        secure=secure,
+    )
+
+    buckets = client.list_buckets()
+    target_bucket = str(settings.minio_bucket)
+    target_exists = client.bucket_exists(target_bucket)
+
+    print("AUTHENTICATED_LIST_BUCKETS=PASS")
+    print(f"BUCKET_COUNT={len(buckets)}")
+    print(f"TARGET_BUCKET_CONFIGURED={'YES' if target_bucket else 'NO'}")
+    print(f"TARGET_BUCKET_EXISTS={'YES' if target_exists else 'NO'}")
+
+    if not target_exists:
+        print("OBJECT_ENUMERATION=SKIPPED")
+        raise SystemExit(1)
+
+    object_count = 0
+    total_size = 0
+
+    for item in client.list_objects(
+        target_bucket,
+        recursive=True,
+    ):
+        object_count += 1
+        total_size += int(item.size or 0)
+
+    print("OBJECT_ENUMERATION=PASS")
+    print(f"TARGET_OBJECT_COUNT={object_count}")
+    print(f"TARGET_TOTAL_BYTES={total_size}")
+    print(f"TARGET_TOTAL_MIB={total_size / (1024 ** 2):.3f}")
+    print("MINIO_AUDIT_RESULT=PASS")
+
+except S3Error as exc:
+    print("MINIO_AUDIT_RESULT=FAIL")
+    print("ERROR_TYPE=S3Error")
+    print(f"ERROR_CODE={exc.code}")
+    raise SystemExit(1)
+
+except Exception as exc:
+    print("MINIO_AUDIT_RESULT=FAIL")
+    print(f"ERROR_TYPE={type(exc).__name__}")
+    raise SystemExit(1)
+'@
+PS D:\law-rag-project> $MinioAudit |
+    docker exec -i law-rag-kb python -
+
+PS D:\law-rag-project> $MinioAuditExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== Exit code summary ====="
+
+===== Exit code summary =====
+PS D:\law-rag-project> Write-Host "MinioVersionExitCode:" $MinioVersionExitCode
+MinioVersionExitCode: 0
+PS D:\law-rag-project> Write-Host "LiveStatusCode:" $LiveStatus
+LiveStatusCode: 200
+PS D:\law-rag-project> Write-Host "ReadyStatusCode:" $ReadyStatus
+ReadyStatusCode: 200
+PS D:\law-rag-project> Write-Host "MinioAuditExitCode:" $MinioAuditExitCode
+MinioAuditExitCode: 0
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715135502
+**********************

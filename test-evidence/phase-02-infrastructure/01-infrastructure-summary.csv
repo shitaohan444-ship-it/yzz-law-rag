@@ -1,0 +1,37 @@
+﻿"Area","Item","Status","Detail"
+"Compose","服务解析","PASS","识别到 6 个服务：postgres, db-migrate, minio, etcd, standalone, rag-api"
+"Compose","docker compose ps --all","PASS","容器状态已保存到 docker-compose-ps-all.txt"
+"容器","PostgreSQL / postgres","PASS","state=running，health=healthy，restart=0"
+"容器","MinIO / minio","PASS","state=running，health=healthy，restart=0"
+"容器","etcd / etcd","PASS","state=running，health=healthy，restart=0"
+"容器","Milvus / standalone","PASS","state=running，health=healthy，restart=0"
+"容器","RAG API / rag-api","PASS","state=running，health=healthy，restart=0"
+"迁移","db-migrate","PASS","state=exited，exit=0"
+"PostgreSQL","pg_isready","PASS","/var/run/postgresql:5432 - accepting connections"
+"PostgreSQL","只读 SQL","FAIL","docker : ERROR:  syntax error at end of input
+At D:\law-rag-project\test-evidence\phase-02-infrastructure\01-infrastructure-audit.ps1:394 char:22
++     $PgQueryOutput = docker compose exec -T $PostgresService `
++                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR:  syntax error at end of input:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+LINE 1: SHOW
+            ^"
+"MinIO","Live","PASS","HTTP 200；响应："
+"MinIO","Ready","PASS","HTTP 200；响应："
+"etcd","endpoint health","FAIL","OCI runtime exec failed: exec failed: unable to start container process: exec: ""sh"": executable file not found in $PATH"
+"Milvus","HTTP healthz","PASS","HTTP 200；响应：OK"
+"Milvus","gRPC 19530","PASS","TCP 连接成功"
+"RAG API","GET /health","PASS","HTTP 200；响应：{""pg"":""ok"",""minio"":""ok"",""milvus"":""ok"",""vl_configured"":true}"
+"RAG API","GET /ready","PASS","HTTP 200；响应：{""status"":""ready"",""pg"":""ok"",""minio"":""ok"",""milvus"":""ok"",""models"":{""embedding"":""ok"",""reranker"":""ok""},""authentication"":""disabled"",""vl_configured"":true}"
+"Alembic","current","PASS","python.exe : INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+At D:\law-rag-project\test-evidence\phase-02-infrastructure\01-infrastructure-audit.ps1:560 char:26
++         $CurrentOutput = & $ServicePython -m alembic current 2>&1
++                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (INFO  [alembic....PostgresqlImpl.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+a1b2c3d4e5f6 (head)"
+"Alembic","heads","PASS","a1b2c3d4e5f6 (head)"
+"Alembic","current = head","PASS","当前数据库迁移版本已经位于 head"

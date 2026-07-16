@@ -1,0 +1,14 @@
+﻿===== R1-02 pytest 测试摘要 =====
+开始时间：2026-07-15 15:33:31 +08:00
+结束时间：2026-07-15 15:33:42 +08:00
+墙钟耗时：11.55 秒
+pytest exit code：0
+
+pytest 结果摘要：
+1.20s call     tests/test_llm.py::OpenAICompatibleLlmTests::test_empty_model_response_is_an_error
+93 passed, 6 warnings, 5 subtests passed in 9.00s
+
+R1-02 实际结果：PASS
+
+完整日志：D:\law-rag-project\test-evidence\manual-rag-20260715-152640\R1-offline-baseline\R1-02-pytest-full.log
+JUnit XML：D:\law-rag-project\test-evidence\manual-rag-20260715-152640\R1-offline-baseline\R1-02-pytest-junit.xml

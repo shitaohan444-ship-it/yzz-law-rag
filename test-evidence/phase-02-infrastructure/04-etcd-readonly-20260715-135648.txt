@@ -1,0 +1,113 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715135648
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 38992
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-02-infrastructure\04-etcd-readonly-20260715-135648.txt
+PS D:\law-rag-project> Write-Host "`n===== etcdctl version ====="
+
+===== etcdctl version =====
+PS D:\law-rag-project> docker exec -e ETCDCTL_API=3 milvus-etcd `
+    etcdctl version
+etcdctl version: 3.5.25
+API version: 3.5
+PS D:\law-rag-project> $EtcdVersionExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== etcd endpoint status ====="
+
+===== etcd endpoint status =====
+PS D:\law-rag-project> docker exec -e ETCDCTL_API=3 milvus-etcd `
+    etcdctl `
+    --endpoints=http://127.0.0.1:2379 `
+    endpoint status `
+    --write-out=table
+
+PS D:\law-rag-project> $EndpointStatusExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== etcd member list ====="
+
+===== etcd member list =====
+PS D:\law-rag-project> docker exec -e ETCDCTL_API=3 milvus-etcd `
+    etcdctl `
+    --endpoints=http://127.0.0.1:2379 `
+    member list `
+    --write-out=table
+
+PS D:\law-rag-project> $MemberListExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== etcd alarms ====="
+
+===== etcd alarms =====
+PS D:\law-rag-project> $AlarmOutput = @(
+    docker exec -e ETCDCTL_API=3 milvus-etcd `
+        etcdctl `
+        --endpoints=http://127.0.0.1:2379 `
+        alarm list
+)
+PS D:\law-rag-project> $AlarmExitCode = $LASTEXITCODE
+PS D:\law-rag-project> if ([string]::IsNullOrWhiteSpace(($AlarmOutput -join "`n"))) {
+    Write-Host "ETCD_ALARM_COUNT: 0"
+}
+ETCD_ALARM_COUNT: 0
+PS D:\law-rag-project> else {
+    Write-Host "ETCD_ALARM_OUTPUT:"
+    $AlarmOutput
+}
+else : The term 'else' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:1
++ else {
++ ~~~~
+    + CategoryInfo          : ObjectNotFound: (else:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+else : The term 'else' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the
+ spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:1
++ else {
++ ~~~~
+    + CategoryInfo          : ObjectNotFound: (else:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+PS D:\law-rag-project> Write-Host "`n===== etcd read-only range request ====="
+
+===== etcd read-only range request =====
+PS D:\law-rag-project> $ReadProbeOutput = @(
+    docker exec -e ETCDCTL_API=3 milvus-etcd `
+        etcdctl `
+        --endpoints=http://127.0.0.1:2379 `
+        get "__rag_readonly_nonexistent_probe__" `
+        --print-value-only
+)
+PS D:\law-rag-project> $ReadProbeExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "ReadProbeReturnedLineCount:" $ReadProbeOutput.Count
+ReadProbeReturnedLineCount: 0
+PS D:\law-rag-project> Write-Host "ReadProbeExplanation: zero lines is expected because the probe key should not exist."
+ReadProbeExplanation: zero lines is expected because the probe key should not exist.
+PS D:\law-rag-project> Write-Host "`n===== Exit code summary ====="
+
+===== Exit code summary =====
+PS D:\law-rag-project> Write-Host "EtcdVersionExitCode:" $EtcdVersionExitCode
+EtcdVersionExitCode: 0
+PS D:\law-rag-project> Write-Host "EndpointStatusExitCode:" $EndpointStatusExitCode
+EndpointStatusExitCode: 0
+PS D:\law-rag-project> Write-Host "MemberListExitCode:" $MemberListExitCode
+MemberListExitCode: 0
+PS D:\law-rag-project> Write-Host "AlarmExitCode:" $AlarmExitCode
+AlarmExitCode: 0
+PS D:\law-rag-project> Write-Host "ReadProbeExitCode:" $ReadProbeExitCode
+ReadProbeExitCode: 0
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715135649
+**********************

@@ -1,0 +1,395 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715143428
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 20908
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\quick-test\quick-test-20260715-143428.txt
+PS D:\law-rag-project> Write-Host "`n========== 1. Runtime versions =========="
+
+========== 1. Runtime versions ==========
+PS D:\law-rag-project> $PythonVersion = @(& $Python --version 2>&1)
+PS D:\law-rag-project> $PythonCode = $LASTEXITCODE
+PS D:\law-rag-project> $PythonVersion
+Python 3.11.9
+PS D:\law-rag-project> Add-QuickResult "Python runtime" ($PythonCode -eq 0) ($PythonVersion -join " ")
+PS D:\law-rag-project> $NodeVersion = @(node --version 2>&1)
+PS D:\law-rag-project> $NodeCode = $LASTEXITCODE
+PS D:\law-rag-project> $NodeVersion
+v22.22.3
+PS D:\law-rag-project> Add-QuickResult "Node runtime" ($NodeCode -eq 0) ($NodeVersion -join " ")
+PS D:\law-rag-project> $PnpmVersion = @(pnpm --version 2>&1)
+PS D:\law-rag-project> $PnpmCode = $LASTEXITCODE
+PS D:\law-rag-project> $PnpmVersion
+10.32.0
+PS D:\law-rag-project> Add-QuickResult "pnpm runtime" ($PnpmCode -eq 0) ($PnpmVersion -join " ")
+PS D:\law-rag-project> $DockerVersion = @(docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}' 2>&1)
+PS D:\law-rag-project> $DockerCode = $LASTEXITCODE
+PS D:\law-rag-project> $DockerVersion
+Client=29.6.1 Server=29.6.1
+PS D:\law-rag-project> Add-QuickResult "Docker engine" ($DockerCode -eq 0) ($DockerVersion -join " ")
+PS D:\law-rag-project> Write-Host "`n========== 2. Python dependencies =========="
+
+========== 2. Python dependencies ==========
+PS D:\law-rag-project> $PipCheck = @(& $Python -m pip check 2>&1)
+PS D:\law-rag-project> $PipCheckCode = $LASTEXITCODE
+PS D:\law-rag-project> $PipCheck
+No broken requirements found.
+PS D:\law-rag-project> Add-QuickResult "Python dependencies" ($PipCheckCode -eq 0) ($PipCheck -join " ")
+PS D:\law-rag-project> Write-Host "`n========== 3. Local model files =========="
+
+========== 3. Local model files ==========
+PS D:\law-rag-project> $ModelAuditScript = @'
+from pathlib import Path
+from app.core.config import settings
+
+models = {
+    "embedding": Path(settings.embedding_model),
+    "reranker": Path(settings.reranker_model),
+}
+
+failed = False
+
+for name, path in models.items():
+    exists = path.exists()
+    config_exists = (path / "config.json").exists() if exists else False
+    weights = []
+
+    if exists:
+        weights = [
+            item for item in path.rglob("*")
+            if item.is_file()
+            and item.suffix.lower() in {".safetensors", ".bin", ".pt"}
+            and item.stat().st_size > 0
+        ]
+
+    passed = exists and config_exists and bool(weights)
+    print(
+        f"{name}: exists={exists} "
+        f"config={config_exists} "
+        f"weight_files={len(weights)} "
+        f"passed={passed}"
+    )
+
+    if not passed:
+        failed = True
+
+raise SystemExit(1 if failed else 0)
+'@
+PS D:\law-rag-project> $ModelOutput = @(
+    $ModelAuditScript |
+        & $Python - 2>&1
+)
+PS D:\law-rag-project> $ModelCode = $LASTEXITCODE
+PS D:\law-rag-project> $ModelOutput
+python.exe : Traceback (most recent call last):
+At line:3 char:9
++         & $Python - 2>&1
++         ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+  File "<stdin>", line 2, in <module>
+ModuleNotFoundError: No module named 'app'
+PS D:\law-rag-project> Add-QuickResult "Local model files" ($ModelCode -eq 0) "BGE-M3 and Reranker"
+PS D:\law-rag-project> Write-Host "`n========== 4. Docker containers =========="
+
+========== 4. Docker containers ==========
+PS D:\law-rag-project> docker compose ps --all
+
+PS D:\law-rag-project> $LongRunningContainers = @(
+    "law-rag-kb",
+    "law-rag-postgres",
+    "law-rag-minio",
+    "milvus-etcd",
+    "milvus-standalone"
+)
+PS D:\law-rag-project> $ContainerFailures = 0
+PS D:\law-rag-project> foreach ($ContainerName in $LongRunningContainers) {
+    $StateOutput = @(
+        docker inspect `
+            --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' `
+            $ContainerName 2>&1
+    )
+
+    $InspectCode = $LASTEXITCODE
+    $StateText = ($StateOutput | Select-Object -Last 1).ToString()
+    Write-Host "$ContainerName => $StateText"
+
+    $ContainerPassed = (
+        $InspectCode -eq 0 -and
+        $StateText -match "^running\|(healthy|none)$"
+    )
+
+    if (-not $ContainerPassed) {
+        $ContainerFailures++
+    }
+}
+law-rag-kb => running|healthy
+law-rag-postgres => running|healthy
+law-rag-minio => running|healthy
+milvus-etcd => running|healthy
+milvus-standalone => running|healthy
+PS D:\law-rag-project> $MigrationState = @(
+    docker inspect `
+        --format '{{.State.Status}}|{{.State.ExitCode}}' `
+        law-rag-db-migrate 2>&1
+)
+PS D:\law-rag-project> $MigrationInspectCode = $LASTEXITCODE
+PS D:\law-rag-project> $MigrationStateText = ($MigrationState | Select-Object -Last 1).ToString()
+PS D:\law-rag-project> Write-Host "law-rag-db-migrate => $MigrationStateText"
+law-rag-db-migrate => exited|0
+PS D:\law-rag-project> $MigrationPassed = (
+    $MigrationInspectCode -eq 0 -and
+    $MigrationStateText -eq "exited|0"
+)
+PS D:\law-rag-project> $ContainersPassed = (
+    $ContainerFailures -eq 0 -and
+    $MigrationPassed
+)
+PS D:\law-rag-project> Add-QuickResult "Docker containers" $ContainersPassed "5 healthy services; migration exited 0"
+PS D:\law-rag-project> Write-Host "`n========== 5. GET /health and /ready =========="
+
+========== 5. GET /health and /ready ==========
+PS D:\law-rag-project> $HealthPassed = $false
+PS D:\law-rag-project> $ReadyPassed = $false
+PS D:\law-rag-project> try {
+    $HealthWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $Health = Invoke-RestMethod `
+        -Uri "http://127.0.0.1:8000/health" `
+        -Method Get `
+        -TimeoutSec 30
+    $HealthWatch.Stop()
+
+    $Health | ConvertTo-Json -Depth 5
+
+    $HealthPassed = (
+        $Health.pg -eq "ok" -and
+        $Health.minio -eq "ok" -and
+        $Health.milvus -eq "ok"
+    )
+
+    Write-Host "HealthDurationMs:" $HealthWatch.ElapsedMilliseconds
+}
+catch {
+    Write-Host "Health request failed:" $_.Exception.GetType().Name
+}
+{
+    "pg":  "ok",
+    "minio":  "ok",
+    "milvus":  "ok",
+    "vl_configured":  true
+}
+HealthDurationMs: 92
+PS D:\law-rag-project> try {
+    $ReadyWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $Ready = Invoke-RestMethod `
+        -Uri "http://127.0.0.1:8000/ready" `
+        -Method Get `
+        -TimeoutSec 180
+    $ReadyWatch.Stop()
+
+    $Ready | ConvertTo-Json -Depth 5
+
+    $ReadyPassed = (
+        $Ready.status -eq "ready" -and
+        $Ready.pg -eq "ok" -and
+        $Ready.minio -eq "ok" -and
+        $Ready.milvus -eq "ok" -and
+        $Ready.models.embedding -eq "ok" -and
+        $Ready.models.reranker -eq "ok"
+    )
+
+    Write-Host "ReadyDurationMs:" $ReadyWatch.ElapsedMilliseconds
+}
+catch {
+    Write-Host "Ready request failed:" $_.Exception.GetType().Name
+}
+{
+    "status":  "ready",
+    "pg":  "ok",
+    "minio":  "ok",
+    "milvus":  "ok",
+    "models":  {
+                   "embedding":  "ok",
+                   "reranker":  "ok"
+               },
+    "vl_configured":  true
+}
+ReadyDurationMs: 10
+PS D:\law-rag-project> Add-QuickResult "GET /health" $HealthPassed "PostgreSQL, MinIO, Milvus"
+PS D:\law-rag-project> Add-QuickResult "GET /ready" $ReadyPassed "Embedding and Reranker loaded"
+PS D:\law-rag-project> Write-Host "`n========== 6. Alembic version =========="
+
+========== 6. Alembic version ==========
+PS D:\law-rag-project> $DbRevisionOutput = @(
+    "SELECT version_num FROM alembic_version;" |
+        docker exec -i law-rag-postgres sh -lc `
+            'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -X -tA' 2>&1
+)
+PS D:\law-rag-project> $DbRevisionCode = $LASTEXITCODE
+PS D:\law-rag-project> $DbRevisionText = $DbRevisionOutput -join "`n"
+PS D:\law-rag-project> $CurrentOutput = @(
+    docker compose run `
+        --rm `
+        --no-deps `
+        --entrypoint alembic `
+        db-migrate `
+        current 2>&1
+)
+PS D:\law-rag-project> $CurrentCode = $LASTEXITCODE
+PS D:\law-rag-project> $CurrentText = $CurrentOutput -join "`n"
+PS D:\law-rag-project> $HeadsOutput = @(
+    docker compose run `
+        --rm `
+        --no-deps `
+        --entrypoint alembic `
+        db-migrate `
+        heads 2>&1
+)
+PS D:\law-rag-project> $HeadsCode = $LASTEXITCODE
+PS D:\law-rag-project> $HeadsText = $HeadsOutput -join "`n"
+PS D:\law-rag-project> $RevisionLinePattern = '(?m)^\s*([0-9a-f]{12})(?:\s+\(head\))?\s*$'
+PS D:\law-rag-project> $DbRevisionMatch = [regex]::Match(
+    $DbRevisionText,
+    $RevisionLinePattern
+)
+PS D:\law-rag-project> $CurrentRevisionMatch = [regex]::Match(
+    $CurrentText,
+    $RevisionLinePattern
+)
+PS D:\law-rag-project> $HeadsRevisionMatch = [regex]::Match(
+    $HeadsText,
+    $RevisionLinePattern
+)
+PS D:\law-rag-project> $DbRevision = $DbRevisionMatch.Groups[1].Value
+PS D:\law-rag-project> $CurrentRevision = $CurrentRevisionMatch.Groups[1].Value
+PS D:\law-rag-project> $HeadsRevision = $HeadsRevisionMatch.Groups[1].Value
+PS D:\law-rag-project> Write-Host "DatabaseRevision:" $DbRevision
+DatabaseRevision: a1b2c3d4e5f6
+PS D:\law-rag-project> Write-Host "CurrentRevision:" $CurrentRevision
+CurrentRevision: a1b2c3d4e5f6
+PS D:\law-rag-project> Write-Host "HeadsRevision:" $HeadsRevision
+HeadsRevision: a1b2c3d4e5f6
+PS D:\law-rag-project> $AlembicPassed = (
+    $DbRevisionCode -eq 0 -and
+    $CurrentCode -eq 0 -and
+    $HeadsCode -eq 0 -and
+    $DbRevision -ne "" -and
+    $DbRevision -eq $CurrentRevision -and
+    $CurrentRevision -eq $HeadsRevision
+)
+PS D:\law-rag-project> Add-QuickResult "Alembic revision" $AlembicPassed "$DbRevision / $CurrentRevision / $HeadsRevision"
+PS D:\law-rag-project> Write-Host "`n========== 7. Python pytest =========="
+
+========== 7. Python pytest ==========
+PS D:\law-rag-project> Set-Location "$Root\law-rag-kb"
+PS D:\law-rag-project\law-rag-kb> $env:PYTHONDONTWRITEBYTECODE = "1"
+PS D:\law-rag-project\law-rag-kb> & $Python -m pytest `
+    ".\tests" `
+    -q `
+    -ra `
+    --tb=short `
+    --junitxml="$JunitFile" `
+    -p no:cacheprovider
+
+PS D:\law-rag-project\law-rag-kb> $PytestCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-kb> Remove-Item Env:PYTHONDONTWRITEBYTECODE -ErrorAction SilentlyContinue
+PS D:\law-rag-project\law-rag-kb> Add-QuickResult "Python pytest" ($PytestCode -eq 0) "exit=$PytestCode"
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n========== 8. Node dependency tree =========="
+
+========== 8. Node dependency tree ==========
+PS D:\law-rag-project\law-rag-kb> Set-Location "$Root\law-rag-api"
+PS D:\law-rag-project\law-rag-api> pnpm list --depth 0 --json |
+    Set-Content -Path $NodeTreeFile -Encoding UTF8
+PS D:\law-rag-project\law-rag-api> $NodeDependencyCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-api> Add-QuickResult "Node dependencies" ($NodeDependencyCode -eq 0) "exit=$NodeDependencyCode"
+PS D:\law-rag-project\law-rag-api> Write-Host "`n========== 9. Node ESLint =========="
+
+========== 9. Node ESLint ==========
+PS D:\law-rag-project\law-rag-api> pnpm exec eslint "{src,apps,libs,test}/**/*.ts"
+
+PS D:\law-rag-project\law-rag-api> $EslintCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-api> Add-QuickResult "Node ESLint" ($EslintCode -eq 0) "exit=$EslintCode"
+PS D:\law-rag-project\law-rag-api> Write-Host "`n========== 10. Node build =========="
+
+========== 10. Node build ==========
+PS D:\law-rag-project\law-rag-api> pnpm run build
+
+PS D:\law-rag-project\law-rag-api> $NodeBuildCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-api> Add-QuickResult "Node build" ($NodeBuildCode -eq 0) "exit=$NodeBuildCode"
+PS D:\law-rag-project\law-rag-api> Write-Host "`n========== 11. Node unit tests =========="
+
+========== 11. Node unit tests ==========
+PS D:\law-rag-project\law-rag-api> pnpm run test -- --runInBand
+
+PS D:\law-rag-project\law-rag-api> $NodeUnitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-api> Add-QuickResult "Node unit tests" ($NodeUnitCode -eq 0) "exit=$NodeUnitCode"
+PS D:\law-rag-project\law-rag-api> Set-Location $Root
+PS D:\law-rag-project> Write-Host "`n========== QUICK TEST SUMMARY =========="
+
+========== QUICK TEST SUMMARY ==========
+PS D:\law-rag-project> $script:QuickResults |
+    Format-Table Check, Passed, Detail -AutoSize
+
+Check               Passed Detail
+-----               ------ ------
+Python runtime        True Python 3.11.9
+Node runtime          True v22.22.3
+pnpm runtime          True 10.32.0
+Docker engine         True Client=29.6.1 Server=29.6.1
+Python dependencies   True No broken requirements found.
+Local model files    False BGE-M3 and Reranker
+Docker containers     True 5 healthy services; migration exited 0
+GET /health           True PostgreSQL, MinIO, Milvus
+GET /ready            True Embedding and Reranker loaded
+Alembic revision      True a1b2c3d4e5f6 / a1b2c3d4e5f6 / a1b2c3d4e5f6
+Python pytest         True exit=0
+Node dependencies     True exit=0
+Node ESLint           True exit=0
+Node build            True exit=0
+Node unit tests       True exit=0
+
+
+PS D:\law-rag-project> $FailedChecks = @(
+    $script:QuickResults |
+        Where-Object { -not $_.Passed }
+)
+PS D:\law-rag-project> Write-Host "TotalChecks:" $script:QuickResults.Count
+TotalChecks: 15
+PS D:\law-rag-project> Write-Host "PassedChecks:" ($script:QuickResults.Count - $FailedChecks.Count)
+PassedChecks: 14
+PS D:\law-rag-project> Write-Host "FailedChecks:" $FailedChecks.Count
+FailedChecks: 1
+PS D:\law-rag-project> if ($FailedChecks.Count -eq 0) {
+    Write-Host "QUICK_TEST_RESULT: PASS" -ForegroundColor Green
+} else {
+    Write-Host "QUICK_TEST_RESULT: FAIL" -ForegroundColor Red
+    Write-Host "失败项："
+    $FailedChecks | Format-Table Check, Detail -AutoSize
+}
+QUICK_TEST_RESULT: FAIL
+失败项：
+
+Check             Detail
+-----             ------
+Local model files BGE-M3 and Reranker
+
+
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715143509
+**********************

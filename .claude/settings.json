@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe -c \"from app.models import Base; print\\('Tables:', len\\(Base.metadata.tables\\)\\); print\\(list\\(Base.metadata.tables.keys\\(\\)\\)[:5]\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from app.models import Base; print\\('Tables:', len\\(Base.metadata.tables\\)\\); print\\(list\\(Base.metadata.tables.keys\\(\\)\\)[:10]\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from app.models import Base; print\\('Tables:', len\\(Base.metadata.tables\\)\\); print\\(sorted\\(Base.metadata.tables.keys\\(\\)\\)[:10]\\)\")",
+      "Bash(.venv/Scripts/python.exe -m alembic revision --autogenerate -m \"oa phase 1 2 system and client\")",
+      "Bash(.venv/Scripts/python.exe -m alembic upgrade head)",
+      "Bash(.venv/Scripts/python.exe -m alembic revision -m \"oa phase 5 6 foreign keys\")",
+      "Bash(.venv/Scripts/python.exe -m alembic revision -m \"oa phase 5 6 indexes\")",
+      "Bash(.venv/Scripts/python.exe -m alembic revision --autogenerate -m \"oa phase 7 8 legal and finance\")",
+      "Bash(.venv/Scripts/python.exe -m alembic revision -m \"oa phase 7 8 foreign keys\")",
+      "Bash(.venv/Scripts/python.exe -m alembic revision -m \"oa phase 7 8 indexes\")",
+      "Bash(.venv/Scripts/python.exe -m alembic revision --autogenerate -m \"oa phase 9 10 admin and knowledge ai\")",
+      "Bash(.venv/Scripts/python.exe -m alembic revision -m \"oa phase 9 10 foreign keys\")",
+      "Bash(.venv/Scripts/python.exe -m alembic revision -m \"oa phase 9 10 indexes\")",
+      "Bash(cd /d/d--law-rag-project && ls -la)",
+      "Read(//d//**)",
+      "Bash(.venv/Scripts/python.exe -m alembic current)",
+      "Bash(.venv/Scripts/python.exe scripts/init_db.py)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/python.exe -m alembic history --verbose)",
+      "Bash(.venv/Scripts/python.exe -m alembic check)",
+      "Bash(ls -la \"/f/瀛之志事务所/一体化OA系统/0-数据库/第二版/excel/v2.0/律所综合业务数据库v2.14_市场线下拓展备注版.xlsx\" 2>&1 || echo \"File not accessible\")",
+      "Read(//f/瀛之志事务所/一体化OA系统/0-数据库/第二版/excel/v2.0/**)",
+      "Bash(.venv/Scripts/python.exe -c \"from app.models import oa_views; print\\(oa_views.VIEW_NAMES\\); print\\(len\\(oa_views.VIEW_NAMES\\)\\)\")",
+      "Bash(.venv/Scripts/python.exe -m alembic revision -m \"oa_phase_11_views\")",
+      "Bash(.venv/Scripts/python.exe -m alembic downgrade -1)",
+      "Bash(.venv/Scripts/python.exe -c \"from app.models import oa_views; print\\('OK:', len\\(oa_views.VIEW_NAMES\\), 'views'\\)\")"
+    ]
+  }
+}

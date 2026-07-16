@@ -1,0 +1,33 @@
+name: platform-api
+
+on:
+  push:
+    paths:
+      - "law-platform-api/**"
+      - ".github/workflows/platform-api.yml"
+  pull_request:
+    paths:
+      - "law-platform-api/**"
+      - ".github/workflows/platform-api.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: law-platform-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: law-platform-api/.nvmrc
+          cache: pnpm
+          cache-dependency-path: law-platform-api/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm exec eslint "{src,apps,libs,test}/**/*.ts"
+      - run: pnpm run build
+      - run: pnpm run test -- --runInBand

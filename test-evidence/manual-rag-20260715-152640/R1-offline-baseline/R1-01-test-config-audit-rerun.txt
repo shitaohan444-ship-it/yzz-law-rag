@@ -1,0 +1,260 @@
+﻿===== R1-01 离线测试配置审计复测 =====
+测试时间：2026-07-15 15:29:12 +08:00
+
+===== 1. pytest 配置文件 =====
+[NOT FOUND] pytest.ini
+[NOT FOUND] pyproject.toml
+[NOT FOUND] setup.cfg
+[NOT FOUND] tox.ini
+
+===== 2. 测试文件数量 =====
+Python 测试文件数量：10
+tests\__init__.py
+tests\test_api.py
+tests\test_chunker.py
+tests\test_document_markdown.py
+tests\test_llm.py
+tests\test_markdown_pipeline.py
+tests\test_multimodal_ingest.py
+tests\test_reranker.py
+tests\test_retrieve.py
+tests\test_security.py
+
+===== 3. 云端调用相关代码命中 =====
+云端相关命中数量：8
+tests\test_llm.py:18: "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+tests\test_llm.py:29: self.assertEqual(request["model"], "qwen3.7-plus")
+tests\test_llm.py:44: "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+tests\test_llm.py:56: "https://example.invalid/v1", "secret", "qwen3.7-plus", "prompt"
+tests\test_multimodal_ingest.py:203: # 真实根因：qwen3-vl-plus 偶发用 Unicode 弯引号 “ ” 包裹个别键，替代 ASCII 双引号，
+tests\test_multimodal_ingest.py:246: self._original_key = settings.vl_api_key
+tests\test_multimodal_ingest.py:247: settings.vl_api_key = "test-key"
+tests\test_multimodal_ingest.py:250: settings.vl_api_key = self._original_key
+
+===== 4. Mock / Stub / 隔离代码命中 =====
+隔离机制命中数量：103
+tests\test_api.py:2: from unittest.mock import patch
+tests\test_api.py:4: from fastapi.testclient import TestClient
+tests\test_api.py:16: cls.client = TestClient(app)
+tests\test_api.py:32: @patch("app.api.health._check_model_path", return_value="ok")
+tests\test_api.py:33: @patch("app.api.health._check_milvus", return_value="ok")
+tests\test_api.py:34: @patch("app.api.health._check_minio", return_value="ok")
+tests\test_api.py:35: @patch("app.api.health._check_pg", return_value="ok")
+tests\test_api.py:46: @patch("app.api.health._check_model_path", return_value="missing")
+tests\test_api.py:47: @patch("app.api.health._check_milvus", return_value="ok")
+tests\test_api.py:48: @patch("app.api.health._check_minio", return_value="ok")
+tests\test_api.py:49: @patch("app.api.health._check_pg", return_value="ok")
+tests\test_api.py:60: @patch("app.api.search.retrieve.search")
+tests\test_api.py:88: @patch("app.api.search.retrieve.search")
+tests\test_api.py:114: @patch("app.api.chat.chat_service.chat")
+tests\test_api.py:150: @patch("app.api.chat.chat_service.chat")
+tests\test_api.py:164: @patch("app.api.documents.ingest_service.ingest_document")
+tests\test_api.py:173: @patch("app.api.documents.ingest_service.get_document_status", return_value=None)
+tests\test_api.py:180: @patch("app.api.documents.ingest_service.ingest_document")
+tests\test_api.py:190: @patch("app.api.documents.ingest_service.ingest_document")
+tests\test_api.py:205: @patch("app.api.documents.ingest_service.ingest_document")
+tests\test_document_markdown.py:4: from unittest.mock import patch
+tests\test_document_markdown.py:6: from fastapi.testclient import TestClient
+tests\test_document_markdown.py:40: @patch("app.core.storage.get_minio_client")
+tests\test_document_markdown.py:57: with patch.object(llm, "get_llm") as glm:
+tests\test_document_markdown.py:65: with patch.object(llm, "get_llm") as glm:
+tests\test_document_markdown.py:73: with patch.object(llm, "get_llm") as glm:
+tests\test_document_markdown.py:93: with patch("app.ingest.service.minio_presigned_url", return_value="https://minio/p.png"):
+tests\test_document_markdown.py:116: with patch("app.ingest.service.minio_presigned_url", side_effect=RuntimeError("minio down")):
+tests\test_document_markdown.py:135: @patch("app.ingest.service._load_kept_images", return_value=[])
+tests\test_document_markdown.py:136: @patch("app.ingest.service._load_document")
+tests\test_document_markdown.py:147: @patch("app.ingest.service._load_kept_images", return_value=[])
+tests\test_document_markdown.py:148: @patch("app.ingest.service._load_document", return_value=None)
+tests\test_document_markdown.py:157: self.client = TestClient(app)
+tests\test_document_markdown.py:159: @patch("app.ingest.service.build_document_markdown")
+tests\test_document_markdown.py:175: @patch("app.ingest.service.build_document_markdown", return_value=None)
+tests\test_document_markdown.py:205: with patch.object(describe, "generate_description", return_value=None):
+tests\test_llm.py:3: from unittest.mock import patch
+tests\test_llm.py:10: @patch("openai.OpenAI")
+tests\test_llm.py:35: @patch("openai.OpenAI")
+tests\test_llm.py:47: @patch("openai.OpenAI")
+tests\test_markdown_pipeline.py:4: from unittest.mock import MagicMock, patch
+tests\test_markdown_pipeline.py:299: client = MagicMock()
+tests\test_markdown_pipeline.py:308: patch.object(service, "ensure_collection"),
+tests\test_markdown_pipeline.py:309: patch.object(service, "_load_document", return_value=row),
+tests\test_markdown_pipeline.py:310: patch.object(service, "_set_status") as status_mock,
+tests\test_markdown_pipeline.py:311: patch.object(service, "_set_vl_summary"),
+tests\test_markdown_pipeline.py:312: patch.object(service, "_resolve_document", return_value=(document, "hash")),
+tests\test_markdown_pipeline.py:313: patch.object(service.cleaner, "clean", return_value=document),
+tests\test_markdown_pipeline.py:314: patch.object(service.image_filter, "deduplicate", return_value=[asset]),
+tests\test_markdown_pipeline.py:315: patch.object(service, "_store_pending_images", return_value=({asset.sha256: 8}, {asset.sha256})),
+tests\test_markdown_pipeline.py:316: patch.object(service.markdown_builder, "build_initial_markdown", side_effect=mark("build", draft.text)),
+tests\test_markdown_pipeline.py:317: patch.object(service.markdown_builder, "split_markdown_draft", side_effect=mark("split", [draft])),
+tests\test_markdown_pipeline.py:318: patch.object(service.markdown_builder, "image_contexts", return_value={8: draft.text}),
+tests\test_markdown_pipeline.py:319: patch.object(service, "_analyze_images_after_draft", side_effect=mark("vl", [analysis])),
+tests\test_markdown_pipeline.py:320: patch.object(service, "_update_image_analyses"),
+tests\test_markdown_pipeline.py:321: patch.object(service, "_generate_doc_description", return_value="概述"),
+tests\test_markdown_pipeline.py:322: patch.object(service.markdown_builder, "enrich_drafts", side_effect=mark("enrich", [enriched])),
+tests\test_markdown_pipeline.py:323: patch.object(service.markdown_builder, "finalize_chunks", side_effect=mark("finalize", [final])),
+tests\test_markdown_pipeline.py:324: patch.object(service.markdown_builder, "enrich_markdown", return_value="# 图\n\n## 文档概述\n\n概述"),
+tests\test_markdown_pipeline.py:325: patch.object(service.embedding, "encode_batch", side_effect=mark("embedding", ([[0.0]], [{}]))),
+tests\test_markdown_pipeline.py:326: patch.object(service, "get_milvus_client", return_value=client),
+tests\test_multimodal_ingest.py:4: from unittest.mock import patch
+tests\test_multimodal_ingest.py:252: @patch("app.ingest.vl._request")
+tests\test_multimodal_ingest.py:270: @patch("app.ingest.vl._request")
+tests\test_multimodal_ingest.py:288: @patch("app.ingest.vl._request")
+tests\test_multimodal_ingest.py:307: @patch("app.ingest.vl._request")
+tests\test_multimodal_ingest.py:328: @patch("app.ingest.vl._request")
+tests\test_reranker.py:2: from unittest.mock import MagicMock, patch
+tests\test_reranker.py:8: @patch("app.rag.reranker.get_reranker_model")
+tests\test_reranker.py:12: model = MagicMock()
+tests\test_retrieve.py:2: from unittest.mock import patch
+tests\test_retrieve.py:26: @patch("app.rag.retrieve.reranker.rerank", return_value=[0.9])
+tests\test_retrieve.py:27: @patch("app.rag.retrieve.hybrid_recall")
+tests\test_security.py:2: from unittest.mock import patch
+tests\test_security.py:4: from fastapi.testclient import TestClient
+tests\test_security.py:106: @patch("app.rag.retrieve.hybrid_recall")
+tests\test_security.py:115: cls.client = TestClient(app)
+tests\test_security.py:123: @patch.object(settings, "rag_service_token", TOKEN)
+tests\test_security.py:124: @patch.object(settings, "auth_enabled", True)
+tests\test_security.py:136: @patch("app.api.search.retrieve.search", return_value=[])
+tests\test_security.py:137: @patch("app.api.search.authorized_doc_ids", return_value=[16])
+tests\test_security.py:138: @patch("app.core.security.load_user_principal", return_value=USER)
+tests\test_security.py:139: @patch.object(settings, "rag_service_token", TOKEN)
+tests\test_security.py:140: @patch.object(settings, "auth_enabled", True)
+tests\test_security.py:154: @patch("app.api.documents.ingest_service.get_document_status")
+tests\test_security.py:155: @patch("app.api.documents.can_access_document", return_value=False)
+tests\test_security.py:156: @patch("app.core.security.load_user_principal", return_value=USER)
+tests\test_security.py:157: @patch.object(settings, "rag_service_token", TOKEN)
+tests\test_security.py:158: @patch.object(settings, "auth_enabled", True)
+tests\test_security.py:167: @patch("app.api.documents.ingest_service.ingest_document")
+tests\test_security.py:168: @patch.object(settings, "rag_service_token", TOKEN)
+tests\test_security.py:169: @patch.object(settings, "auth_enabled", True)
+tests\test_security.py:183: @patch("app.api.chat.chat_service.chat")
+tests\test_security.py:184: @patch("app.core.security.load_user_principal", return_value=USER)
+tests\test_security.py:185: @patch.object(settings, "rag_service_token", TOKEN)
+tests\test_security.py:186: @patch.object(settings, "auth_enabled", True)
+tests\test_security.py:199: @patch("app.api.health._check_model_path", return_value="ok")
+tests\test_security.py:200: @patch("app.api.health._check_milvus", return_value="ok")
+tests\test_security.py:201: @patch("app.api.health._check_minio", return_value="ok")
+tests\test_security.py:202: @patch("app.api.health._check_pg", return_value="ok")
+
+===== 5. 跳过和外部测试标记 =====
+标记命中数量：0
+
+===== 6. pytest 只收集，不执行 =====
+pytest collect exit code：0
+tests/test_api.py::ApiContractTests::test_chat_returns_answer_and_numbered_refs
+tests/test_api.py::ApiContractTests::test_empty_search_and_chat_inputs_are_rejected
+tests/test_api.py::ApiContractTests::test_existing_document_ingest_returns_success
+tests/test_api.py::ApiContractTests::test_get_missing_document_returns_404
+tests/test_api.py::ApiContractTests::test_llm_provider_failure_returns_sanitized_502
+tests/test_api.py::ApiContractTests::test_non_not_found_ingest_failure_remains_business_response
+tests/test_api.py::ApiContractTests::test_openapi_exposes_all_rag_routes
+tests/test_api.py::ApiContractTests::test_post_ingest_missing_document_returns_404
+tests/test_api.py::ApiContractTests::test_ready_returns_200_when_dependencies_and_models_exist
+tests/test_api.py::ApiContractTests::test_ready_returns_503_and_names_missing_models
+tests/test_api.py::ApiContractTests::test_search_serializes_article_metadata
+tests/test_api.py::ApiContractTests::test_search_serializes_image_reference_metadata
+tests/test_api.py::ApiContractTests::test_successful_document_without_force_returns_skipped
+tests/test_chunker.py::ArticleChunkingTests::test_article_metadata_matches_the_article_in_text
+tests/test_chunker.py::ArticleChunkingTests::test_article_references_in_notes_do_not_trigger_structured_chunking
+tests/test_chunker.py::ArticleChunkingTests::test_long_article_subchunks_keep_the_same_metadata
+tests/test_chunker.py::ArticleChunkingTests::test_part_chapter_section_article_metadata_uses_chapter_only
+tests/test_chunker.py::ArticleChunkingTests::test_short_articles_are_never_merged
+tests/test_chunker.py::ArticleChunkingTests::test_txt_part_chapter_section_article_all_become_markdown_headings
+tests/test_chunker.py::ArticleChunkingTests::test_unstructured_text_uses_recursive_fallback
+tests/test_document_markdown.py::ChunkerMarkdownTests::test_chapter_and_article_promoted_to_headings
+tests/test_document_markdown.py::ChunkerMarkdownTests::test_empty_text_returns_empty
+tests/test_document_markdown.py::ChunkerMarkdownTests::test_existing_markdown_heading_preserved
+tests/test_document_markdown.py::PresignedUrlTests::test_presigned_url_uses_bucket_and_expiry
+tests/test_document_markdown.py::DescribeTests::test_generate_description_degrades_on_failure
+tests/test_document_markdown.py::DescribeTests::test_generate_description_none_when_no_content
+tests/test_document_markdown.py::DescribeTests::test_generate_description_returns_text
+tests/test_document_markdown.py::RenderMarkdownTests::test_full_render_with_description_body_and_image
+tests/test_document_markdown.py::RenderMarkdownTests::test_presigned_failure_does_not_break_render
+tests/test_document_markdown.py::RenderMarkdownTests::test_render_without_description_or_images
+tests/test_document_markdown.py::BuildMarkdownServiceTests::test_build_markdown_assembles_sections
+tests/test_document_markdown.py::BuildMarkdownServiceTests::test_build_markdown_returns_none_when_missing
+tests/test_document_markdown.py::MarkdownApiTests::test_get_markdown_200
+tests/test_document_markdown.py::MarkdownApiTests::test_get_markdown_404
+tests/test_document_markdown.py::IngestDescriptionDegradationTests::test_generate_passes_through_none
+tests/test_document_markdown.py::IngestDescriptionDegradationTests::test_generate_returns_none_when_disabled
+tests/test_llm.py::OpenAICompatibleLlmTests::test_empty_model_response_is_an_error
+tests/test_llm.py::OpenAICompatibleLlmTests::test_provider_exception_is_sanitized
+tests/test_llm.py::OpenAICompatibleLlmTests::test_qwen_request_uses_limits_and_disables_thinking
+tests/test_markdown_pipeline.py::ConversionTests::test_docx_preserves_paragraph_table_image_order
+tests/test_markdown_pipeline.py::ConversionTests::test_native_markdown_plain_article_line_gets_metadata
+tests/test_markdown_pipeline.py::ConversionTests::test_native_markdown_preserves_structural_whitespace
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_filtered_image_is_removed
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_image_is_draft_after_split_and_not_last_article_metadata
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_long_image_description_repeats_image_reference
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_new_chapter_clears_previous_section_context
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_part_chapter_section_hierarchy_keeps_chapter_metadata
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_summary_is_independent_and_markdown_vectors_use_new_contract
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_switching_section_does_not_change_chapter
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_trailing_image_keeps_hierarchy_but_not_article_metadata
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_vl_description_and_ocr_are_enriched_but_category_is_not
+tests/test_markdown_pipeline.py::PipelineOrderTests::test_ingest_splits_before_vl_and_embeds_after_enrichment
+tests/test_markdown_pipeline.py::MarkdownReadTests::test_llm_projection_removes_urls_but_keeps_description
+tests/test_multimodal_ingest.py::StructuredParserTests::test_docx_preserves_paragraph_and_image_order
+tests/test_multimodal_ingest.py::StructuredParserTests::test_pdf_keeps_text_page_and_embedded_image
+tests/test_multimodal_ingest.py::StructuredParserTests::test_scan_only_pdf_is_rendered_as_page_image
+tests/test_multimodal_ingest.py::StructuredParserTests::test_standalone_image_becomes_image_document
+tests/test_multimodal_ingest.py::CleaningAndPrefilterTests::test_cleaner_removes_repeated_header_footer_but_keeps_body
+tests/test_multimodal_ingest.py::CleaningAndPrefilterTests::test_duplicate_images_are_merged_with_all_pages
+tests/test_multimodal_ingest.py::CleaningAndPrefilterTests::test_solid_image_is_filtered_without_vl
+tests/test_multimodal_ingest.py::JsonParserTests::test_content_as_block_list_parses
+tests/test_multimodal_ingest.py::JsonParserTests::test_content_smart_quotes_are_preserved
+tests/test_multimodal_ingest.py::JsonParserTests::test_json_with_surrounding_explanation_parses
+tests/test_multimodal_ingest.py::JsonParserTests::test_markdown_code_fence_parses
+tests/test_multimodal_ingest.py::JsonParserTests::test_pure_json_object_parses
+tests/test_multimodal_ingest.py::JsonParserTests::test_raw_newline_inside_string_is_repaired
+tests/test_multimodal_ingest.py::JsonParserTests::test_smart_quote_delimiters_are_normalized
+tests/test_multimodal_ingest.py::JsonParserTests::test_trailing_comma_is_repaired
+tests/test_multimodal_ingest.py::JsonParserTests::test_truncated_json_raises_with_diagnostics
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_diagram_kept_even_when_model_says_drop
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_high_confidence_logo_is_not_searchable
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_image_description_uses_stable_independent_chunk
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_important_legal_image_is_always_kept
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_invalid_json_is_retried_once
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_text_is_still_ingested_when_vl_fails
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_truncated_response_raises_sanitized_error
+tests/test_reranker.py::RerankerBatchingTests::test_length_sorted_batches_restore_original_score_order
+tests/test_retrieve.py::LegalQueryNormalizationTests::test_manufacturer_and_direct_liability_phrases_are_normalized
+tests/test_retrieve.py::LegalQueryNormalizationTests::test_search_uses_original_query_for_recall_and_normalized_for_reranker
+tests/test_retrieve.py::LegalQueryNormalizationTests::test_unrelated_compensation_scope_query_is_not_rewritten
+tests/test_security.py::AuthorizationPolicyTests::test_case_binding_cannot_be_bypassed_by_public_permission
+tests/test_security.py::AuthorizationPolicyTests::test_case_scope_remains_a_hard_boundary_for_admin
+tests/test_security.py::AuthorizationPolicyTests::test_empty_authorized_scope_never_runs_retrieval
+tests/test_security.py::AuthorizationPolicyTests::test_false_permission_flag_does_not_grant_admin
+tests/test_security.py::AuthorizationPolicyTests::test_permission_levels_are_fail_closed
+tests/test_security.py::AuthorizationPolicyTests::test_unbound_case_material_is_owner_only
+tests/test_security.py::SecurityApiTests::test_chat_rejects_spoofed_body_user_id
+tests/test_security.py::SecurityApiTests::test_ingest_accepts_service_identity_without_user_header
+tests/test_security.py::SecurityApiTests::test_production_without_auth_is_not_ready
+tests/test_security.py::SecurityApiTests::test_read_requires_service_token_and_user_context
+tests/test_security.py::SecurityApiTests::test_search_uses_server_authorized_document_scope
+tests/test_security.py::SecurityApiTests::test_security_headers_and_request_size_limit
+tests/test_security.py::SecurityApiTests::test_unauthorized_document_is_hidden_as_not_found
+
+============================== warnings summary ===============================
+.venv\Lib\site-packages\FlagEmbedding\BGE_M3\trainer.py:1
+  D:\law-rag-project\law-rag-kb\.venv\Lib\site-packages\FlagEmbedding\BGE_M3\trainer.py:1: DeprecationWarning: Importing from 'sentence_transformers.models' is deprecated and will be removed in a future version. Please use 'sentence_transformers.sentence_transformer.modules' instead.
+    from sentence_transformers import SentenceTransformer, models
+
+<frozen importlib._bootstrap>:241
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:241
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+93 tests collected in 8.20s
+sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+===== R1-01 摘要 =====
+云端相关命中：8
+隔离机制命中：103
+外部或跳过标记命中：0
+pytest collect exit code：0

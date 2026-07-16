@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+data/
+scripts/
+tests/
+requirements-lock.txt
+*.log
+*.tmp

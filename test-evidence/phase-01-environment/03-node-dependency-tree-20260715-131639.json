@@ -1,0 +1,240 @@
+﻿[
+  {
+    "name": "law-rag-api",
+    "version": "0.0.1",
+    "path": "D:\\law-rag-project\\law-rag-api",
+    "private": true,
+    "dependencies": {
+      "@nestjs/common": {
+        "from": "@nestjs/common",
+        "version": "11.1.28",
+        "resolved": "https://registry.npmmirror.com/@nestjs/common/-/common-11.1.28.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@nestjs+common@11.1.28_clas_53bb0f92c6e94a17c26e8a0114a147c2\\node_modules\\@nestjs\\common"
+      },
+      "@nestjs/config": {
+        "from": "@nestjs/config",
+        "version": "4.0.4",
+        "resolved": "https://registry.npmmirror.com/@nestjs/config/-/config-4.0.4.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@nestjs+config@4.0.4_@nestj_52d564b896890bcbeb5d17f451974c6e\\node_modules\\@nestjs\\config"
+      },
+      "@nestjs/core": {
+        "from": "@nestjs/core",
+        "version": "11.1.28",
+        "resolved": "https://registry.npmmirror.com/@nestjs/core/-/core-11.1.28.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@nestjs+core@11.1.28_@nestj_68e0b03b87639797ffd703cc1293c4af\\node_modules\\@nestjs\\core"
+      },
+      "@nestjs/mapped-types": {
+        "from": "@nestjs/mapped-types",
+        "version": "2.1.1",
+        "resolved": "https://registry.npmmirror.com/@nestjs/mapped-types/-/mapped-types-2.1.1.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@nestjs+mapped-types@2.1.1__d510ce485d4eaa8f1abf2d0c6ce5a5b8\\node_modules\\@nestjs\\mapped-types"
+      },
+      "@nestjs/platform-express": {
+        "from": "@nestjs/platform-express",
+        "version": "11.1.28",
+        "resolved": "https://registry.npmmirror.com/@nestjs/platform-express/-/platform-express-11.1.28.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@nestjs+platform-express@11_3610481afed0d66818f6323dad6da34c\\node_modules\\@nestjs\\platform-express"
+      },
+      "@prisma/client": {
+        "from": "@prisma/client",
+        "version": "6.19.3",
+        "resolved": "https://registry.npmmirror.com/@prisma/client/-/client-6.19.3.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@prisma+client@6.19.3_prism_1d040ab5215f59f0e27ddee7f0cf082e\\node_modules\\@prisma\\client"
+      },
+      "class-transformer": {
+        "from": "class-transformer",
+        "version": "0.5.1",
+        "resolved": "https://registry.npmmirror.com/class-transformer/-/class-transformer-0.5.1.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\class-transformer@0.5.1\\node_modules\\class-transformer"
+      },
+      "class-validator": {
+        "from": "class-validator",
+        "version": "0.15.1",
+        "resolved": "https://registry.npmmirror.com/class-validator/-/class-validator-0.15.1.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\class-validator@0.15.1\\node_modules\\class-validator"
+      },
+      "joi": {
+        "from": "joi",
+        "version": "18.2.3",
+        "resolved": "https://registry.npmmirror.com/joi/-/joi-18.2.3.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\joi@18.2.3\\node_modules\\joi"
+      },
+      "minio": {
+        "from": "minio",
+        "version": "8.0.7",
+        "resolved": "https://registry.npmmirror.com/minio/-/minio-8.0.7.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\minio@8.0.7\\node_modules\\minio"
+      },
+      "reflect-metadata": {
+        "from": "reflect-metadata",
+        "version": "0.2.2",
+        "resolved": "https://registry.npmmirror.com/reflect-metadata/-/reflect-metadata-0.2.2.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\reflect-metadata@0.2.2\\node_modules\\reflect-metadata"
+      },
+      "rxjs": {
+        "from": "rxjs",
+        "version": "7.8.2",
+        "resolved": "https://registry.npmmirror.com/rxjs/-/rxjs-7.8.2.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\rxjs@7.8.2\\node_modules\\rxjs"
+      }
+    },
+    "devDependencies": {
+      "@eslint/eslintrc": {
+        "from": "@eslint/eslintrc",
+        "version": "3.3.6",
+        "resolved": "https://registry.npmmirror.com/@eslint/eslintrc/-/eslintrc-3.3.6.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@eslint+eslintrc@3.3.6\\node_modules\\@eslint\\eslintrc"
+      },
+      "@eslint/js": {
+        "from": "@eslint/js",
+        "version": "9.39.5",
+        "resolved": "https://registry.npmmirror.com/@eslint/js/-/js-9.39.5.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@eslint+js@9.39.5\\node_modules\\@eslint\\js"
+      },
+      "@nestjs/cli": {
+        "from": "@nestjs/cli",
+        "version": "11.0.24",
+        "resolved": "https://registry.npmmirror.com/@nestjs/cli/-/cli-11.0.24.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@nestjs+cli@11.0.24_@types+node@22.20.1_prettier@3.9.5\\node_modules\\@nestjs\\cli"
+      },
+      "@nestjs/schematics": {
+        "from": "@nestjs/schematics",
+        "version": "11.1.0",
+        "resolved": "https://registry.npmmirror.com/@nestjs/schematics/-/schematics-11.1.0.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@nestjs+schematics@11.1.0_c_1487aa99b682a9f9af20c5957bc4459f\\node_modules\\@nestjs\\schematics"
+      },
+      "@nestjs/testing": {
+        "from": "@nestjs/testing",
+        "version": "11.1.28",
+        "resolved": "https://registry.npmmirror.com/@nestjs/testing/-/testing-11.1.28.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@nestjs+testing@11.1.28_@ne_c33fd63a997ffab213fe2251a8494cd1\\node_modules\\@nestjs\\testing"
+      },
+      "@types/express": {
+        "from": "@types/express",
+        "version": "5.0.6",
+        "resolved": "https://registry.npmmirror.com/@types/express/-/express-5.0.6.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@types+express@5.0.6\\node_modules\\@types\\express"
+      },
+      "@types/jest": {
+        "from": "@types/jest",
+        "version": "30.0.0",
+        "resolved": "https://registry.npmmirror.com/@types/jest/-/jest-30.0.0.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@types+jest@30.0.0\\node_modules\\@types\\jest"
+      },
+      "@types/multer": {
+        "from": "@types/multer",
+        "version": "2.2.0",
+        "resolved": "https://registry.npmmirror.com/@types/multer/-/multer-2.2.0.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@types+multer@2.2.0\\node_modules\\@types\\multer"
+      },
+      "@types/node": {
+        "from": "@types/node",
+        "version": "22.20.1",
+        "resolved": "https://registry.npmmirror.com/@types/node/-/node-22.20.1.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@types+node@22.20.1\\node_modules\\@types\\node"
+      },
+      "@types/supertest": {
+        "from": "@types/supertest",
+        "version": "7.2.0",
+        "resolved": "https://registry.npmmirror.com/@types/supertest/-/supertest-7.2.0.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\@types+supertest@7.2.0\\node_modules\\@types\\supertest"
+      },
+      "eslint": {
+        "from": "eslint",
+        "version": "9.39.5",
+        "resolved": "https://registry.npmmirror.com/eslint/-/eslint-9.39.5.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\eslint@9.39.5_jiti@2.7.0\\node_modules\\eslint"
+      },
+      "eslint-config-prettier": {
+        "from": "eslint-config-prettier",
+        "version": "10.1.8",
+        "resolved": "https://registry.npmmirror.com/eslint-config-prettier/-/eslint-config-prettier-10.1.8.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\eslint-config-prettier@10.1.8_eslint@9.39.5_jiti@2.7.0_\\node_modules\\eslint-config-prettier"
+      },
+      "eslint-plugin-prettier": {
+        "from": "eslint-plugin-prettier",
+        "version": "5.5.6",
+        "resolved": "https://registry.npmmirror.com/eslint-plugin-prettier/-/eslint-plugin-prettier-5.5.6.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\eslint-plugin-prettier@5.5._bf91c473f175034366f454c49a472761\\node_modules\\eslint-plugin-prettier"
+      },
+      "globals": {
+        "from": "globals",
+        "version": "17.7.0",
+        "resolved": "https://registry.npmmirror.com/globals/-/globals-17.7.0.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\globals@17.7.0\\node_modules\\globals"
+      },
+      "jest": {
+        "from": "jest",
+        "version": "30.4.2",
+        "resolved": "https://registry.npmmirror.com/jest/-/jest-30.4.2.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\jest@30.4.2_@types+node@22._b9c18da3a098009f33f2e7e9621a7b2a\\node_modules\\jest"
+      },
+      "prettier": {
+        "from": "prettier",
+        "version": "3.9.5",
+        "resolved": "https://registry.npmmirror.com/prettier/-/prettier-3.9.5.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\prettier@3.9.5\\node_modules\\prettier"
+      },
+      "prisma": {
+        "from": "prisma",
+        "version": "6.19.3",
+        "resolved": "https://registry.npmmirror.com/prisma/-/prisma-6.19.3.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\prisma@6.19.3_typescript@5.9.3\\node_modules\\prisma"
+      },
+      "source-map-support": {
+        "from": "source-map-support",
+        "version": "0.5.21",
+        "resolved": "https://registry.npmmirror.com/source-map-support/-/source-map-support-0.5.21.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\source-map-support@0.5.21\\node_modules\\source-map-support"
+      },
+      "supertest": {
+        "from": "supertest",
+        "version": "7.2.2",
+        "resolved": "https://registry.npmmirror.com/supertest/-/supertest-7.2.2.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\supertest@7.2.2\\node_modules\\supertest"
+      },
+      "ts-jest": {
+        "from": "ts-jest",
+        "version": "29.4.11",
+        "resolved": "https://registry.npmmirror.com/ts-jest/-/ts-jest-29.4.11.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\ts-jest@29.4.11_@babel+core_1ebc14633334de39a6cefd715b9ab99c\\node_modules\\ts-jest"
+      },
+      "ts-loader": {
+        "from": "ts-loader",
+        "version": "9.6.2",
+        "resolved": "https://registry.npmmirror.com/ts-loader/-/ts-loader-9.6.2.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\ts-loader@9.6.2_typescript@5.9.3_webpack@5.106.2\\node_modules\\ts-loader"
+      },
+      "ts-node": {
+        "from": "ts-node",
+        "version": "10.9.2",
+        "resolved": "https://registry.npmmirror.com/ts-node/-/ts-node-10.9.2.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\ts-node@10.9.2_@types+node@22.20.1_typescript@5.9.3\\node_modules\\ts-node"
+      },
+      "tsconfig-paths": {
+        "from": "tsconfig-paths",
+        "version": "4.2.0",
+        "resolved": "https://registry.npmmirror.com/tsconfig-paths/-/tsconfig-paths-4.2.0.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\tsconfig-paths@4.2.0\\node_modules\\tsconfig-paths"
+      },
+      "tsx": {
+        "from": "tsx",
+        "version": "4.23.0",
+        "resolved": "https://registry.npmmirror.com/tsx/-/tsx-4.23.0.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\tsx@4.23.0\\node_modules\\tsx"
+      },
+      "typescript": {
+        "from": "typescript",
+        "version": "5.9.3",
+        "resolved": "https://registry.npmmirror.com/typescript/-/typescript-5.9.3.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\typescript@5.9.3\\node_modules\\typescript"
+      },
+      "typescript-eslint": {
+        "from": "typescript-eslint",
+        "version": "8.63.0",
+        "resolved": "https://registry.npmmirror.com/typescript-eslint/-/typescript-eslint-8.63.0.tgz",
+        "path": "D:\\law-rag-project\\law-rag-api\\node_modules\\.pnpm\\typescript-eslint@8.63.0_es_1b6d239e02009771d06c14eee5c77a28\\node_modules\\typescript-eslint"
+      }
+    }
+  }
+]

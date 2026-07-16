@@ -1,0 +1,12 @@
+{
+  "_comment": "第11阶段视图的主键配置，用于 SQLAlchemy ORM 映射。如果业务粒度无法保证唯一，请改为 ['view_row_id'] 并在视图 SQL 中生成 ROW_NUMBER() OVER() AS view_row_id。",
+  "v_ops_live_effect": ["session_id"],
+  "v_ops_channel_daily_report": ["report_date", "platform_name"],
+  "v_lead_conversion_funnel": ["stat_date", "channel_id"],
+  "v_mkt_call_invitation_ledger": ["lead_id", "call_record_id"],
+  "v_mkt_visit_negotiation_ledger": ["appointment_id", "negotiation_id"],
+  "v_mkt_employee_performance": ["employee_id", "stat_start_date"],
+  "v_case_management_ledger": ["case_no"],
+  "v_case_progress_dashboard": ["case_id"],
+  "v_payment_collection_summary": ["case_id", "contract_id"]
+}

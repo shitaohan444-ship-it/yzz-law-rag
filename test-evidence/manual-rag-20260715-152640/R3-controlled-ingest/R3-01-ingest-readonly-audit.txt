@@ -1,0 +1,1205 @@
+﻿===== R3-01 入库脚本与测试文件只读审计 =====
+测试时间：2026-07-15 15:50:20 +08:00
+
+============================================================
+文件：law-rag-kb\scripts\seed_test_doc.py
+总行数：133
+
+关键命中数量：27
+
+----- 行 1 至 6 -----
+>>>     1: """造测试数据：上传本地文件到 MinIO + 插 sys_attachment + kb_document。
+        2: 
+        3: content_text 故意留 NULL，强制入库链走 MinIO 原件解析路径。
+        4: 
+        5: 用法（在 law-rag-kb 目录）：
+        6:     python scripts/seed_test_doc.py [本地文件路径]
+
+----- 行 1 至 8 -----
+        1: """造测试数据：上传本地文件到 MinIO + 插 sys_attachment + kb_document。
+        2: 
+>>>     3: content_text 故意留 NULL，强制入库链走 MinIO 原件解析路径。
+        4: 
+        5: 用法（在 law-rag-kb 目录）：
+        6:     python scripts/seed_test_doc.py [本地文件路径]
+        7: 
+        8: 打印新建的 doc_id，供  curl -X POST http://localhost:8000/documents/{doc_id}/ingest  使用。
+
+----- 行 5 至 13 -----
+        5: 用法（在 law-rag-kb 目录）：
+        6:     python scripts/seed_test_doc.py [本地文件路径]
+        7: 
+>>>     8: 打印新建的 doc_id，供  curl -X POST http://localhost:8000/documents/{doc_id}/ingest  使用。
+        9: """
+       10: import sys
+       11: from datetime import datetime, timezone
+       12: from io import BytesIO
+       13: from pathlib import Path
+
+----- 行 13 至 21 -----
+       13: from pathlib import Path
+       14: 
+       15: # 让脚本能 import app 包（脚本在 law-rag-kb/scripts/，app 在 law-rag-kb/app/）
+>>>    16: sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+       17: 
+       18: from sqlalchemy import text  # noqa: E402
+       19: 
+       20: from app.core.config import settings  # noqa: E402
+       21: from app.core.database import SessionLocal  # noqa: E402
+
+----- 行 19 至 27 -----
+       19: 
+       20: from app.core.config import settings  # noqa: E402
+       21: from app.core.database import SessionLocal  # noqa: E402
+>>>    22: from app.core.minio_client import get_minio_client  # noqa: E402
+       23: 
+       24: DEFAULT_FILE = (
+       25:     Path(__file__).resolve().parent.parent.parent / "test_files" / "sample_test_upload.pdf"
+       26: )
+       27: 
+
+----- 行 49 至 57 -----
+       49:     data = local_path.read_bytes()
+       50:     ext = local_path.suffix.lower()  # .pdf
+       51:     mime = _MIME.get(ext, "application/octet-stream")
+>>>    52:     object_key = f"kb-test/{local_path.name}"
+       53: 
+       54:     # 1. 上传 MinIO（覆盖同名，便于重复验证）
+       55:     client = get_minio_client()
+       56:     client.put_object(
+       57:         settings.minio_bucket, object_key, BytesIO(data), len(data), content_type=mime
+
+----- 行 51 至 59 -----
+       51:     mime = _MIME.get(ext, "application/octet-stream")
+       52:     object_key = f"kb-test/{local_path.name}"
+       53: 
+>>>    54:     # 1. 上传 MinIO（覆盖同名，便于重复验证）
+       55:     client = get_minio_client()
+       56:     client.put_object(
+       57:         settings.minio_bucket, object_key, BytesIO(data), len(data), content_type=mime
+       58:     )
+       59:     print(f"uploaded: {settings.minio_bucket}/{object_key} ({len(data)} bytes)")
+
+----- 行 52 至 60 -----
+       52:     object_key = f"kb-test/{local_path.name}"
+       53: 
+       54:     # 1. 上传 MinIO（覆盖同名，便于重复验证）
+>>>    55:     client = get_minio_client()
+       56:     client.put_object(
+       57:         settings.minio_bucket, object_key, BytesIO(data), len(data), content_type=mime
+       58:     )
+       59:     print(f"uploaded: {settings.minio_bucket}/{object_key} ({len(data)} bytes)")
+       60: 
+
+----- 行 54 至 62 -----
+       54:     # 1. 上传 MinIO（覆盖同名，便于重复验证）
+       55:     client = get_minio_client()
+       56:     client.put_object(
+>>>    57:         settings.minio_bucket, object_key, BytesIO(data), len(data), content_type=mime
+       58:     )
+       59:     print(f"uploaded: {settings.minio_bucket}/{object_key} ({len(data)} bytes)")
+       60: 
+       61:     now = datetime.now(timezone.utc)
+       62:     with SessionLocal() as db:
+
+----- 行 56 至 64 -----
+       56:     client.put_object(
+       57:         settings.minio_bucket, object_key, BytesIO(data), len(data), content_type=mime
+       58:     )
+>>>    59:     print(f"uploaded: {settings.minio_bucket}/{object_key} ({len(data)} bytes)")
+       60: 
+       61:     now = datetime.now(timezone.utc)
+       62:     with SessionLocal() as db:
+       63:         # 拿一个 employee id 作为上传人/审计人
+       64:         emp = db.execute(
+
+----- 行 71 至 79 -----
+       71:             )
+       72:             sys.exit(1)
+       73: 
+>>>    74:         # 2. 插 sys_attachment（填齐 NOT NULL 列；bucket/object_key/etag 来自 MinIO 上传）
+       75:         att_id = db.execute(
+       76:             text(
+       77:                 """
+       78:                 INSERT INTO oa.sys_attachment
+       79:                   (biz_type, biz_id, file_name, file_ext, mime_type, file_size,
+
+----- 行 75 至 83 -----
+       75:         att_id = db.execute(
+       76:             text(
+       77:                 """
+>>>    78:                 INSERT INTO oa.sys_attachment
+       79:                   (biz_type, biz_id, file_name, file_ext, mime_type, file_size,
+       80:                    storage_type, storage_path, file_hash, ocr_text,
+       81:                    uploaded_by, uploaded_at, ai_index_status,
+       82:                    original_file_name, current_file_name, file_exists_flag,
+       83:                    bucket, object_key,
+
+----- 行 80 至 88 -----
+       80:                    storage_type, storage_path, file_hash, ocr_text,
+       81:                    uploaded_by, uploaded_at, ai_index_status,
+       82:                    original_file_name, current_file_name, file_exists_flag,
+>>>    83:                    bucket, object_key,
+       84:                    created_at, created_by, updated_at, updated_by, status)
+       85:                 VALUES
+       86:                   ('document', 0, :fname, :ext, :mime, :size,
+       87:                    'minio', :obj, '', '',
+       88:                    :emp, :now, 'pending',
+
+----- 行 81 至 89 -----
+       81:                    uploaded_by, uploaded_at, ai_index_status,
+       82:                    original_file_name, current_file_name, file_exists_flag,
+       83:                    bucket, object_key,
+>>>    84:                    created_at, created_by, updated_at, updated_by, status)
+       85:                 VALUES
+       86:                   ('document', 0, :fname, :ext, :mime, :size,
+       87:                    'minio', :obj, '', '',
+       88:                    :emp, :now, 'pending',
+       89:                    :fname, :fname, 'Y',
+
+----- 行 84 至 92 -----
+       84:                    created_at, created_by, updated_at, updated_by, status)
+       85:                 VALUES
+       86:                   ('document', 0, :fname, :ext, :mime, :size,
+>>>    87:                    'minio', :obj, '', '',
+       88:                    :emp, :now, 'pending',
+       89:                    :fname, :fname, 'Y',
+       90:                    :bucket, :obj,
+       91:                    :now, :emp, :now, :emp, 'active')
+       92:                 RETURNING id
+
+----- 行 85 至 93 -----
+       85:                 VALUES
+       86:                   ('document', 0, :fname, :ext, :mime, :size,
+       87:                    'minio', :obj, '', '',
+>>>    88:                    :emp, :now, 'pending',
+       89:                    :fname, :fname, 'Y',
+       90:                    :bucket, :obj,
+       91:                    :now, :emp, :now, :emp, 'active')
+       92:                 RETURNING id
+       93:                 """
+
+----- 行 97 至 105 -----
+       97:                 "ext": ext.lstrip("."),
+       98:                 "mime": mime,
+       99:                 "size": len(data),
+>>>   100:                 "obj": object_key,
+      101:                 "emp": emp,
+      102:                 "now": now,
+      103:                 "bucket": settings.minio_bucket,
+      104:             },
+      105:         ).scalar()
+
+----- 行 100 至 108 -----
+      100:                 "obj": object_key,
+      101:                 "emp": emp,
+      102:                 "now": now,
+>>>   103:                 "bucket": settings.minio_bucket,
+      104:             },
+      105:         ).scalar()
+      106:         db.commit()
+      107:         print(f"sys_attachment id={att_id}")
+      108: 
+
+----- 行 104 至 112 -----
+      104:             },
+      105:         ).scalar()
+      106:         db.commit()
+>>>   107:         print(f"sys_attachment id={att_id}")
+      108: 
+      109:         # 3. 插 kb_document（content_text=NULL 强制走 MinIO 解析）
+      110:         doc_id = db.execute(
+      111:             text(
+      112:                 """
+
+----- 行 106 至 114 -----
+      106:         db.commit()
+      107:         print(f"sys_attachment id={att_id}")
+      108: 
+>>>   109:         # 3. 插 kb_document（content_text=NULL 强制走 MinIO 解析）
+      110:         doc_id = db.execute(
+      111:             text(
+      112:                 """
+      113:                 INSERT INTO oa.kb_document
+      114:                   (doc_title, doc_type, legal_category, attachment_id, content_text,
+
+----- 行 107 至 115 -----
+      107:         print(f"sys_attachment id={att_id}")
+      108: 
+      109:         # 3. 插 kb_document（content_text=NULL 强制走 MinIO 解析）
+>>>   110:         doc_id = db.execute(
+      111:             text(
+      112:                 """
+      113:                 INSERT INTO oa.kb_document
+      114:                   (doc_title, doc_type, legal_category, attachment_id, content_text,
+      115:                    embedding_status, version_no, permission_level,
+
+----- 行 110 至 118 -----
+      110:         doc_id = db.execute(
+      111:             text(
+      112:                 """
+>>>   113:                 INSERT INTO oa.kb_document
+      114:                   (doc_title, doc_type, legal_category, attachment_id, content_text,
+      115:                    embedding_status, version_no, permission_level,
+      116:                    created_at, created_by, updated_at, updated_by, status)
+      117:                 VALUES
+      118:                   (:title, '法规', '综合', :att, NULL,
+
+----- 行 111 至 119 -----
+      111:             text(
+      112:                 """
+      113:                 INSERT INTO oa.kb_document
+>>>   114:                   (doc_title, doc_type, legal_category, attachment_id, content_text,
+      115:                    embedding_status, version_no, permission_level,
+      116:                    created_at, created_by, updated_at, updated_by, status)
+      117:                 VALUES
+      118:                   (:title, '法规', '综合', :att, NULL,
+      119:                    'pending', 'v1', 'public',
+
+----- 行 113 至 121 -----
+      113:                 INSERT INTO oa.kb_document
+      114:                   (doc_title, doc_type, legal_category, attachment_id, content_text,
+      115:                    embedding_status, version_no, permission_level,
+>>>   116:                    created_at, created_by, updated_at, updated_by, status)
+      117:                 VALUES
+      118:                   (:title, '法规', '综合', :att, NULL,
+      119:                    'pending', 'v1', 'public',
+      120:                    :now, :emp, :now, :emp, 'active')
+      121:                 RETURNING id
+
+----- 行 116 至 124 -----
+      116:                    created_at, created_by, updated_at, updated_by, status)
+      117:                 VALUES
+      118:                   (:title, '法规', '综合', :att, NULL,
+>>>   119:                    'pending', 'v1', 'public',
+      120:                    :now, :emp, :now, :emp, 'active')
+      121:                 RETURNING id
+      122:                 """
+      123:             ),
+      124:             {"title": local_path.stem, "att": att_id, "now": now, "emp": emp},
+
+----- 行 124 至 132 -----
+      124:             {"title": local_path.stem, "att": att_id, "now": now, "emp": emp},
+      125:         ).scalar()
+      126:         db.commit()
+>>>   127:         print(f"kb_document id={doc_id}")
+      128: 
+      129:     print(f"\n下一步：curl -X POST http://localhost:8000/documents/{doc_id}/ingest")
+      130: 
+      131: 
+      132: if __name__ == "__main__":
+
+----- 行 126 至 133 -----
+      126:         db.commit()
+      127:         print(f"kb_document id={doc_id}")
+      128: 
+>>>   129:     print(f"\n下一步：curl -X POST http://localhost:8000/documents/{doc_id}/ingest")
+      130: 
+      131: 
+      132: if __name__ == "__main__":
+      133:     main()
+
+============================================================
+文件：law-rag-kb\scripts\batch_ingest.py
+总行数：222
+
+关键命中数量：47
+
+----- 行 1 至 6 -----
+>>>     1: """批量入库脚本：遍历 test_files/ 子目录 → MinIO + sys_attachment + kb_document → 调 ingest 入库。
+        2: 
+        3: 子目录名映射 legal_category / doc_type：法律法规→法规、判决案例→案例、案件材料→案件材料、工作资料→工作资料。
+        4: 幂等：按 object_key 查已有 sys_attachment / kb_document，已存在则复用 doc_id（不重复建表）；
+        5: 入库状态按 ingest_document 自身状态机（已 success 默认 SKIPPED，--force 强制重跑）。
+        6: 
+
+----- 行 1 至 9 -----
+        1: """批量入库脚本：遍历 test_files/ 子目录 → MinIO + sys_attachment + kb_document → 调 ingest 入库。
+        2: 
+        3: 子目录名映射 legal_category / doc_type：法律法规→法规、判决案例→案例、案件材料→案件材料、工作资料→工作资料。
+>>>     4: 幂等：按 object_key 查已有 sys_attachment / kb_document，已存在则复用 doc_id（不重复建表）；
+        5: 入库状态按 ingest_document 自身状态机（已 success 默认 SKIPPED，--force 强制重跑）。
+        6: 
+        7: 用法（在 law-rag-kb 目录）：
+        8:     python scripts/batch_ingest.py            # 新文件入库，已 success 的跳过
+        9:     python scripts/batch_ingest.py --force    # 已入库的也强制重跑
+
+----- 行 2 至 10 -----
+        2: 
+        3: 子目录名映射 legal_category / doc_type：法律法规→法规、判决案例→案例、案件材料→案件材料、工作资料→工作资料。
+        4: 幂等：按 object_key 查已有 sys_attachment / kb_document，已存在则复用 doc_id（不重复建表）；
+>>>     5: 入库状态按 ingest_document 自身状态机（已 success 默认 SKIPPED，--force 强制重跑）。
+        6: 
+        7: 用法（在 law-rag-kb 目录）：
+        8:     python scripts/batch_ingest.py            # 新文件入库，已 success 的跳过
+        9:     python scripts/batch_ingest.py --force    # 已入库的也强制重跑
+       10: """
+
+----- 行 5 至 13 -----
+        5: 入库状态按 ingest_document 自身状态机（已 success 默认 SKIPPED，--force 强制重跑）。
+        6: 
+        7: 用法（在 law-rag-kb 目录）：
+>>>     8:     python scripts/batch_ingest.py            # 新文件入库，已 success 的跳过
+        9:     python scripts/batch_ingest.py --force    # 已入库的也强制重跑
+       10: """
+       11: import argparse
+       12: import os
+       13: import sys
+
+----- 行 6 至 14 -----
+        6: 
+        7: 用法（在 law-rag-kb 目录）：
+        8:     python scripts/batch_ingest.py            # 新文件入库，已 success 的跳过
+>>>     9:     python scripts/batch_ingest.py --force    # 已入库的也强制重跑
+       10: """
+       11: import argparse
+       12: import os
+       13: import sys
+       14: from collections import Counter
+
+----- 行 8 至 16 -----
+        8:     python scripts/batch_ingest.py            # 新文件入库，已 success 的跳过
+        9:     python scripts/batch_ingest.py --force    # 已入库的也强制重跑
+       10: """
+>>>    11: import argparse
+       12: import os
+       13: import sys
+       14: from collections import Counter
+       15: from datetime import datetime, timezone
+       16: from io import BytesIO
+
+----- 行 18 至 26 -----
+       18: 
+       19: # 让脚本能 import app 包，并把 cwd 固定到 law-rag-kb（config 的 .env 依赖 cwd）
+       20: _ROOT = Path(__file__).resolve().parent.parent
+>>>    21: sys.path.insert(0, str(_ROOT))
+       22: os.chdir(_ROOT)
+       23: 
+       24: from sqlalchemy import select, text  # noqa: E402
+       25: 
+       26: from app.core.config import settings  # noqa: E402
+
+----- 行 25 至 33 -----
+       25: 
+       26: from app.core.config import settings  # noqa: E402
+       27: from app.core.database import SessionLocal  # noqa: E402
+>>>    28: from app.core.minio_client import get_minio_client  # noqa: E402
+       29: from app.ingest import service as ingest_service  # noqa: E402
+       30: from app.models.tables import kb_document, sys_attachment  # noqa: E402
+       31: 
+       32: ROOT = Path(__file__).resolve().parent.parent.parent / "test_files"
+       33: 
+
+----- 行 27 至 35 -----
+       27: from app.core.database import SessionLocal  # noqa: E402
+       28: from app.core.minio_client import get_minio_client  # noqa: E402
+       29: from app.ingest import service as ingest_service  # noqa: E402
+>>>    30: from app.models.tables import kb_document, sys_attachment  # noqa: E402
+       31: 
+       32: ROOT = Path(__file__).resolve().parent.parent.parent / "test_files"
+       33: 
+       34: # 子目录 → legal_category / doc_type
+       35: CATEGORY_MAP = {
+
+----- 行 58 至 66 -----
+       58: 
+       59: 
+       60: def main() -> None:
+>>>    61:     parser = argparse.ArgumentParser(description="批量入库 test_files/ 法律文档")
+       62:     parser.add_argument("--force", action="store_true", help="已入库的也强制重跑")
+       63:     args = parser.parse_args()
+       64: 
+       65:     if not ROOT.exists():
+       66:         print(f"test_files not found: {ROOT}", file=sys.stderr)
+
+----- 行 59 至 67 -----
+       59: 
+       60: def main() -> None:
+       61:     parser = argparse.ArgumentParser(description="批量入库 test_files/ 法律文档")
+>>>    62:     parser.add_argument("--force", action="store_true", help="已入库的也强制重跑")
+       63:     args = parser.parse_args()
+       64: 
+       65:     if not ROOT.exists():
+       66:         print(f"test_files not found: {ROOT}", file=sys.stderr)
+       67:         sys.exit(1)
+
+----- 行 75 至 83 -----
+       75:     print(f"found {len(files)} supported files under {ROOT}")
+       76: 
+       77:     emp = _get_emp()
+>>>    78:     results = [_ingest_one(sub, f, emp, force=args.force) for sub, f in files]
+       79: 
+       80:     print("\n===== 批量入库汇总 =====")
+       81:     c = Counter(r["status"] for r in results)
+       82:     print(
+       83:         f"total={len(results)} | success={c.get('success', 0)} "
+
+----- 行 80 至 88 -----
+       80:     print("\n===== 批量入库汇总 =====")
+       81:     c = Counter(r["status"] for r in results)
+       82:     print(
+>>>    83:         f"total={len(results)} | success={c.get('success', 0)} "
+       84:         f"skipped={c.get('skipped', 0)} failed={c.get('failed', 0)}"
+       85:     )
+       86:     for r in results:
+       87:         print(
+       88:             f"  [{r['status']:8s}] {r['category']}/{r['name']} "
+
+----- 行 81 至 89 -----
+       81:     c = Counter(r["status"] for r in results)
+       82:     print(
+       83:         f"total={len(results)} | success={c.get('success', 0)} "
+>>>    84:         f"skipped={c.get('skipped', 0)} failed={c.get('failed', 0)}"
+       85:     )
+       86:     for r in results:
+       87:         print(
+       88:             f"  [{r['status']:8s}] {r['category']}/{r['name']} "
+       89:             f"doc_id={r['doc_id']} chunks={r['chunks']} {r['msg']}"
+
+----- 行 86 至 94 -----
+       86:     for r in results:
+       87:         print(
+       88:             f"  [{r['status']:8s}] {r['category']}/{r['name']} "
+>>>    89:             f"doc_id={r['doc_id']} chunks={r['chunks']} {r['msg']}"
+       90:         )
+       91: 
+       92: 
+       93: def _ingest_one(sub: Path, f: Path, emp: int, *, force: bool) -> dict:
+       94:     category = CATEGORY_MAP[sub.name]
+
+----- 行 90 至 98 -----
+       90:         )
+       91: 
+       92: 
+>>>    93: def _ingest_one(sub: Path, f: Path, emp: int, *, force: bool) -> dict:
+       94:     category = CATEGORY_MAP[sub.name]
+       95:     ext = f.suffix.lower()
+       96:     object_key = f"kb-batch/{sub.name}/{f.name}"
+       97:     rec: dict = {
+       98:         "category": sub.name,
+
+----- 行 93 至 101 -----
+       93: def _ingest_one(sub: Path, f: Path, emp: int, *, force: bool) -> dict:
+       94:     category = CATEGORY_MAP[sub.name]
+       95:     ext = f.suffix.lower()
+>>>    96:     object_key = f"kb-batch/{sub.name}/{f.name}"
+       97:     rec: dict = {
+       98:         "category": sub.name,
+       99:         "name": f.name,
+      100:         "doc_id": None,
+      101:         "status": "failed",
+
+----- 行 97 至 105 -----
+       97:     rec: dict = {
+       98:         "category": sub.name,
+       99:         "name": f.name,
+>>>   100:         "doc_id": None,
+      101:         "status": "failed",
+      102:         "chunks": 0,
+      103:         "msg": "",
+      104:     }
+      105:     data = f.read_bytes()
+
+----- 行 98 至 106 -----
+       98:         "category": sub.name,
+       99:         "name": f.name,
+      100:         "doc_id": None,
+>>>   101:         "status": "failed",
+      102:         "chunks": 0,
+      103:         "msg": "",
+      104:     }
+      105:     data = f.read_bytes()
+      106:     mime = _MIME.get(ext, "application/octet-stream")
+
+----- 行 105 至 113 -----
+      105:     data = f.read_bytes()
+      106:     mime = _MIME.get(ext, "application/octet-stream")
+      107: 
+>>>   108:     # 1. 上传 MinIO（覆盖同名，便于重复验证）
+      109:     try:
+      110:         client = get_minio_client()
+      111:         client.put_object(
+      112:             settings.minio_bucket, object_key, BytesIO(data), len(data), content_type=mime
+      113:         )
+
+----- 行 107 至 115 -----
+      107: 
+      108:     # 1. 上传 MinIO（覆盖同名，便于重复验证）
+      109:     try:
+>>>   110:         client = get_minio_client()
+      111:         client.put_object(
+      112:             settings.minio_bucket, object_key, BytesIO(data), len(data), content_type=mime
+      113:         )
+      114:     except Exception as e:
+      115:         rec["msg"] = f"minio upload: {e}"[:120]
+
+----- 行 109 至 117 -----
+      109:     try:
+      110:         client = get_minio_client()
+      111:         client.put_object(
+>>>   112:             settings.minio_bucket, object_key, BytesIO(data), len(data), content_type=mime
+      113:         )
+      114:     except Exception as e:
+      115:         rec["msg"] = f"minio upload: {e}"[:120]
+      116:         return rec
+      117: 
+
+----- 行 112 至 120 -----
+      112:             settings.minio_bucket, object_key, BytesIO(data), len(data), content_type=mime
+      113:         )
+      114:     except Exception as e:
+>>>   115:         rec["msg"] = f"minio upload: {e}"[:120]
+      116:         return rec
+      117: 
+      118:     # 2. 幂等建/查 sys_attachment + kb_document
+      119:     now = datetime.now(timezone.utc)
+      120:     try:
+
+----- 行 115 至 123 -----
+      115:         rec["msg"] = f"minio upload: {e}"[:120]
+      116:         return rec
+      117: 
+>>>   118:     # 2. 幂等建/查 sys_attachment + kb_document
+      119:     now = datetime.now(timezone.utc)
+      120:     try:
+      121:         doc_id = _ensure_records(object_key, f, ext, mime, len(data), category, emp, now)
+      122:     except Exception as e:
+      123:         rec["msg"] = f"ensure records: {e}"[:120]
+
+----- 行 118 至 126 -----
+      118:     # 2. 幂等建/查 sys_attachment + kb_document
+      119:     now = datetime.now(timezone.utc)
+      120:     try:
+>>>   121:         doc_id = _ensure_records(object_key, f, ext, mime, len(data), category, emp, now)
+      122:     except Exception as e:
+      123:         rec["msg"] = f"ensure records: {e}"[:120]
+      124:         return rec
+      125:     rec["doc_id"] = doc_id
+      126: 
+
+----- 行 122 至 130 -----
+      122:     except Exception as e:
+      123:         rec["msg"] = f"ensure records: {e}"[:120]
+      124:         return rec
+>>>   125:     rec["doc_id"] = doc_id
+      126: 
+      127:     # 3. 入库（状态机自带幂等：已 success 默认 SKIPPED，force 强制重跑）
+      128:     try:
+      129:         res = ingest_service.ingest_document(doc_id, force=force)
+      130:         rec["status"] = res.status
+
+----- 行 124 至 132 -----
+      124:         return rec
+      125:     rec["doc_id"] = doc_id
+      126: 
+>>>   127:     # 3. 入库（状态机自带幂等：已 success 默认 SKIPPED，force 强制重跑）
+      128:     try:
+      129:         res = ingest_service.ingest_document(doc_id, force=force)
+      130:         rec["status"] = res.status
+      131:         rec["chunks"] = res.chunk_count
+      132:         rec["msg"] = (res.message or "")[:120]
+
+----- 行 126 至 134 -----
+      126: 
+      127:     # 3. 入库（状态机自带幂等：已 success 默认 SKIPPED，force 强制重跑）
+      128:     try:
+>>>   129:         res = ingest_service.ingest_document(doc_id, force=force)
+      130:         rec["status"] = res.status
+      131:         rec["chunks"] = res.chunk_count
+      132:         rec["msg"] = (res.message or "")[:120]
+      133:     except Exception as e:
+      134:         rec["msg"] = f"ingest: {e}"[:120]
+
+----- 行 136 至 144 -----
+      136: 
+      137: 
+      138: def _ensure_records(
+>>>   139:     object_key: str, f: Path, ext: str, mime: str, size: int, category: str, emp: int, now
+      140: ) -> int:
+      141:     """幂等：按 object_key 查 attachment / kb_document，缺则补建，返回 doc_id。"""
+      142:     with SessionLocal() as db:
+      143:         att_id = db.execute(
+      144:             select(sys_attachment.c.id).where(sys_attachment.c.object_key == object_key)
+
+----- 行 138 至 146 -----
+      138: def _ensure_records(
+      139:     object_key: str, f: Path, ext: str, mime: str, size: int, category: str, emp: int, now
+      140: ) -> int:
+>>>   141:     """幂等：按 object_key 查 attachment / kb_document，缺则补建，返回 doc_id。"""
+      142:     with SessionLocal() as db:
+      143:         att_id = db.execute(
+      144:             select(sys_attachment.c.id).where(sys_attachment.c.object_key == object_key)
+      145:         ).scalar()
+      146:         created = False
+
+----- 行 141 至 149 -----
+      141:     """幂等：按 object_key 查 attachment / kb_document，缺则补建，返回 doc_id。"""
+      142:     with SessionLocal() as db:
+      143:         att_id = db.execute(
+>>>   144:             select(sys_attachment.c.id).where(sys_attachment.c.object_key == object_key)
+      145:         ).scalar()
+      146:         created = False
+      147: 
+      148:         if att_id is None:
+      149:             att_id = db.execute(
+
+----- 行 149 至 157 -----
+      149:             att_id = db.execute(
+      150:                 text(
+      151:                     """
+>>>   152:                     INSERT INTO oa.sys_attachment
+      153:                       (biz_type, biz_id, file_name, file_ext, mime_type, file_size,
+      154:                        storage_type, storage_path, file_hash, ocr_text,
+      155:                        uploaded_by, uploaded_at, ai_index_status,
+      156:                        original_file_name, current_file_name, file_exists_flag,
+      157:                        bucket, object_key,
+
+----- 行 154 至 162 -----
+      154:                        storage_type, storage_path, file_hash, ocr_text,
+      155:                        uploaded_by, uploaded_at, ai_index_status,
+      156:                        original_file_name, current_file_name, file_exists_flag,
+>>>   157:                        bucket, object_key,
+      158:                        created_at, created_by, updated_at, updated_by, status)
+      159:                     VALUES
+      160:                       ('document', 0, :fname, :ext, :mime, :size,
+      161:                        'minio', :obj, '', '',
+      162:                        :emp, :now, 'pending',
+
+----- 行 155 至 163 -----
+      155:                        uploaded_by, uploaded_at, ai_index_status,
+      156:                        original_file_name, current_file_name, file_exists_flag,
+      157:                        bucket, object_key,
+>>>   158:                        created_at, created_by, updated_at, updated_by, status)
+      159:                     VALUES
+      160:                       ('document', 0, :fname, :ext, :mime, :size,
+      161:                        'minio', :obj, '', '',
+      162:                        :emp, :now, 'pending',
+      163:                        :fname, :fname, 'Y',
+
+----- 行 158 至 166 -----
+      158:                        created_at, created_by, updated_at, updated_by, status)
+      159:                     VALUES
+      160:                       ('document', 0, :fname, :ext, :mime, :size,
+>>>   161:                        'minio', :obj, '', '',
+      162:                        :emp, :now, 'pending',
+      163:                        :fname, :fname, 'Y',
+      164:                        :bucket, :obj,
+      165:                        :now, :emp, :now, :emp, 'active')
+      166:                     RETURNING id
+
+----- 行 159 至 167 -----
+      159:                     VALUES
+      160:                       ('document', 0, :fname, :ext, :mime, :size,
+      161:                        'minio', :obj, '', '',
+>>>   162:                        :emp, :now, 'pending',
+      163:                        :fname, :fname, 'Y',
+      164:                        :bucket, :obj,
+      165:                        :now, :emp, :now, :emp, 'active')
+      166:                     RETURNING id
+      167:                     """
+
+----- 行 171 至 179 -----
+      171:                     "ext": ext.lstrip("."),
+      172:                     "mime": mime,
+      173:                     "size": size,
+>>>   174:                     "obj": object_key,
+      175:                     "emp": emp,
+      176:                     "now": now,
+      177:                     "bucket": settings.minio_bucket,
+      178:                 },
+      179:             ).scalar()
+
+----- 行 174 至 182 -----
+      174:                     "obj": object_key,
+      175:                     "emp": emp,
+      176:                     "now": now,
+>>>   177:                     "bucket": settings.minio_bucket,
+      178:                 },
+      179:             ).scalar()
+      180:             created = True
+      181: 
+      182:         doc_id = db.execute(
+
+----- 行 179 至 187 -----
+      179:             ).scalar()
+      180:             created = True
+      181: 
+>>>   182:         doc_id = db.execute(
+      183:             select(kb_document.c.id).where(kb_document.c.attachment_id == att_id)
+      184:         ).scalar()
+      185:         if doc_id is None:
+      186:             doc_id = db.execute(
+      187:                 text(
+
+----- 行 180 至 188 -----
+      180:             created = True
+      181: 
+      182:         doc_id = db.execute(
+>>>   183:             select(kb_document.c.id).where(kb_document.c.attachment_id == att_id)
+      184:         ).scalar()
+      185:         if doc_id is None:
+      186:             doc_id = db.execute(
+      187:                 text(
+      188:                     """
+
+----- 行 182 至 190 -----
+      182:         doc_id = db.execute(
+      183:             select(kb_document.c.id).where(kb_document.c.attachment_id == att_id)
+      184:         ).scalar()
+>>>   185:         if doc_id is None:
+      186:             doc_id = db.execute(
+      187:                 text(
+      188:                     """
+      189:                     INSERT INTO oa.kb_document
+      190:                       (doc_title, doc_type, legal_category, attachment_id, content_text,
+
+----- 行 183 至 191 -----
+      183:             select(kb_document.c.id).where(kb_document.c.attachment_id == att_id)
+      184:         ).scalar()
+      185:         if doc_id is None:
+>>>   186:             doc_id = db.execute(
+      187:                 text(
+      188:                     """
+      189:                     INSERT INTO oa.kb_document
+      190:                       (doc_title, doc_type, legal_category, attachment_id, content_text,
+      191:                        embedding_status, version_no, permission_level,
+
+----- 行 186 至 194 -----
+      186:             doc_id = db.execute(
+      187:                 text(
+      188:                     """
+>>>   189:                     INSERT INTO oa.kb_document
+      190:                       (doc_title, doc_type, legal_category, attachment_id, content_text,
+      191:                        embedding_status, version_no, permission_level,
+      192:                        created_at, created_by, updated_at, updated_by, status)
+      193:                     VALUES
+      194:                       (:title, :cat, :cat, :att, NULL,
+
+----- 行 187 至 195 -----
+      187:                 text(
+      188:                     """
+      189:                     INSERT INTO oa.kb_document
+>>>   190:                       (doc_title, doc_type, legal_category, attachment_id, content_text,
+      191:                        embedding_status, version_no, permission_level,
+      192:                        created_at, created_by, updated_at, updated_by, status)
+      193:                     VALUES
+      194:                       (:title, :cat, :cat, :att, NULL,
+      195:                        'pending', 'v1', 'public',
+
+----- 行 189 至 197 -----
+      189:                     INSERT INTO oa.kb_document
+      190:                       (doc_title, doc_type, legal_category, attachment_id, content_text,
+      191:                        embedding_status, version_no, permission_level,
+>>>   192:                        created_at, created_by, updated_at, updated_by, status)
+      193:                     VALUES
+      194:                       (:title, :cat, :cat, :att, NULL,
+      195:                        'pending', 'v1', 'public',
+      196:                        :now, :emp, :now, :emp, 'active')
+      197:                     RETURNING id
+
+----- 行 192 至 200 -----
+      192:                        created_at, created_by, updated_at, updated_by, status)
+      193:                     VALUES
+      194:                       (:title, :cat, :cat, :att, NULL,
+>>>   195:                        'pending', 'v1', 'public',
+      196:                        :now, :emp, :now, :emp, 'active')
+      197:                     RETURNING id
+      198:                     """
+      199:                 ),
+      200:                 {"title": f.stem, "cat": category, "att": att_id, "now": now, "emp": emp},
+
+----- 行 203 至 211 -----
+      203: 
+      204:         if created:
+      205:             db.commit()
+>>>   206:     return doc_id
+      207: 
+      208: 
+      209: def _get_emp() -> int:
+      210:     with SessionLocal() as db:
+      211:         emp = db.execute(text("SELECT id FROM oa.sys_employee ORDER BY id LIMIT 1")).scalar()
+
+============================================================
+API 入库路由相关代码
+
+路由命中数量：4
+
+----- app\api\documents.py，行 1 至 16 -----
+>>>     1: """文档入库 API：POST /documents/{doc_id}/ingest、GET /documents/{doc_id}。"""
+        2: import dataclasses
+        3: import logging
+        4: from typing import Annotated
+        5: 
+        6: from fastapi import APIRouter, Depends, HTTPException, Path
+        7: 
+        8: from app.core.authorization import can_access_document
+        9: from app.core.security import Principal, require_service_principal, require_user_principal
+       10: from app.ingest import service as ingest_service
+       11: 
+       12: router = APIRouter(prefix="/documents", tags=["documents"])
+       13: logger = logging.getLogger("uvicorn.error")
+       14: 
+       15: 
+       16: @router.post("/{doc_id}/ingest")
+
+----- app\api\documents.py，行 11 至 31 -----
+       11: 
+       12: router = APIRouter(prefix="/documents", tags=["documents"])
+       13: logger = logging.getLogger("uvicorn.error")
+       14: 
+       15: 
+>>>    16: @router.post("/{doc_id}/ingest")
+       17: def ingest(
+       18:     doc_id: Annotated[int, Path(gt=0)],
+       19:     _principal: Annotated[Principal, Depends(require_service_principal)],
+       20:     force: bool = False,
+       21: ):
+       22:     """同步入库一个 kb_document。
+       23: 
+       24:     def（非 async def）：BGE-M3 CPU 编码是 CPU-bound，async 会阻塞事件循环；
+       25:     普通函数由 Starlette 扔进 threadpool 跑，不卡 /health 等其它请求。
+       26:     """
+       27:     try:
+       28:         result = ingest_service.ingest_document(doc_id, force=force)
+       29:     except ingest_service.DocumentNotFoundError:
+       30:         raise HTTPException(status_code=404, detail="kb_document not found") from None
+       31:     return dataclasses.asdict(result)
+
+----- app\api\documents.py，行 12 至 32 -----
+       12: router = APIRouter(prefix="/documents", tags=["documents"])
+       13: logger = logging.getLogger("uvicorn.error")
+       14: 
+       15: 
+       16: @router.post("/{doc_id}/ingest")
+>>>    17: def ingest(
+       18:     doc_id: Annotated[int, Path(gt=0)],
+       19:     _principal: Annotated[Principal, Depends(require_service_principal)],
+       20:     force: bool = False,
+       21: ):
+       22:     """同步入库一个 kb_document。
+       23: 
+       24:     def（非 async def）：BGE-M3 CPU 编码是 CPU-bound，async 会阻塞事件循环；
+       25:     普通函数由 Starlette 扔进 threadpool 跑，不卡 /health 等其它请求。
+       26:     """
+       27:     try:
+       28:         result = ingest_service.ingest_document(doc_id, force=force)
+       29:     except ingest_service.DocumentNotFoundError:
+       30:         raise HTTPException(status_code=404, detail="kb_document not found") from None
+       31:     return dataclasses.asdict(result)
+       32: 
+
+----- app\ingest\service.py，行 74 至 94 -----
+       74:     image_id: int | None = None
+       75:     page_no: int | None = None
+       76:     image_category: str | None = None
+       77: 
+       78: 
+>>>    79: def ingest_document(doc_id: int, *, force: bool = False) -> IngestResult:
+       80:     """同步入库一个文档；force=True 同时重做解析、VL 和向量。"""
+       81:     row = _load_document(doc_id)
+       82:     if row is None:
+       83:         raise DocumentNotFoundError("kb_document not found")
+       84: 
+       85:     try:
+       86:         ensure_collection()
+       87:     except Exception as exc:
+       88:         return IngestResult(
+       89:             doc_id, EmbeddingStatus.FAILED, message=f"ensure_collection: {exc}"
+       90:         )
+       91: 
+       92:     attachment_id = row["attachment_id"]
+       93:     if row["embedding_status"] == EmbeddingStatus.SUCCESS and not force:
+       94:         return IngestResult(
+
+============================================================
+TXT / Markdown 候选测试文件
+
+候选文件总数：10
+
+path=test_files\manual_acceptance_20260714172227.txt	size_bytes=568	sha256=1C75B0E76F00D669936DBE3FB542C2FBE82C2898112C0B56A40C3642B66F5836
+path=test_files\manual_markdown_20260714175313.md	size_bytes=908	sha256=8047198ACF7974272BF6C6C8E506002556C6BC5C7ED8F65398EA1B8C429FD25F
+path=test_files\rag_test_sample.txt	size_bytes=2138	sha256=AC974C5966E7E54C4B325A0BCDE55F0B21E3F31629AF8C172E34731E68C0837A
+path=test_files\案件材料\民事起诉状样本.md	size_bytes=2361	sha256=54E16B0663217A8151225FBB2BDDB7BF5D1EE61CC2693729B60B11E94154B2E3
+path=test_files\法律法规\劳动合同法.md	size_bytes=2751	sha256=52C3A9AD9F8CAEECC1FA13E256CD47F39BA11AC429E4E45C64D2C8EB1DD854CF
+path=test_files\判决案例\民间借贷纠纷判决书.md	size_bytes=2761	sha256=E1BF9653F5A4A91DE4692C52B436D8F7637F83D74032EFEB6588C8F001D9B2BB
+path=test_files\法律法规\民法典合同编.md	size_bytes=3110	sha256=8DA25B9BAF3927BAC3A05E534FC7456D6C33164FE6D95DBA94C8C008E46B0764
+path=test_files\法律法规\民法典侵权责任编.md	size_bytes=3111	sha256=57D739ED9C4501B39EA2E5412DE3BE7C6F82F06078669913CF3984032568C506
+path=test_files\工作资料\律师实务笔记.md	size_bytes=3166	sha256=21DB376132AB7036437E7C6B32C68903059C708D00B1C4455BE04C0D42BFF97F
+path=test_files\判决案例\劳动争议判决书.md	size_bytes=3316	sha256=F723FBA38B466093A06A6A69AA834D1AB5EDAA58B63B47F361B50C70EF321C31
+
+============================================================
+候选文件内容预览
+
+
+----- test_files\manual_acceptance_20260714172227.txt -----
+size_bytes=568
+手动验收测试文档
+测试标识：TXT-RAG-20260714172227
+
+第一编 总则
+
+第一章 基本规定
+
+第一节 测试范围
+
+第一条 本文档仅用于法律知识库 RAG 手动验收，不代表真实法律意见。
+
+第二条 系统应当把编、章、节和条转换为层级清晰的 Markdown 标题。
+
+第二章 数据安全
+
+第三条 PostgreSQL、Milvus 和聊天日志不得保存 MinIO 预签名 URL。
+
+第四条 纯文本内容不应调用视觉语言模型。
+
+附则
+
+本测试文档的唯一检索短语为：银杏合规验证-20260714172227。
+
+----- test_files\manual_markdown_20260714175313.md -----
+size_bytes=908
+# 原生 Markdown 验收文档
+
+测试标识：MD-RAG-20260714175313
+
+## 一、标题结构
+
+### 三级标题
+
+这是一段普通正文。
+
+## 二、列表结构
+
+- 一级无序列表 A
+  - 二级无序列表 A.1
+    - 三级无序列表 A.1.1
+- 一级无序列表 B
+
+1. 一级有序列表
+   1. 二级有序列表
+   2. 二级有序列表第二项
+2. 一级有序列表第二项
+
+## 三、表格结构
+
+| 检查字段 | 预期结果 | 说明 |
+
+----- test_files\rag_test_sample.txt -----
+size_bytes=2138
+中华人民共和国民法典节选（测试 RAG 入库链）
+
+第一编 总则
+第一章 基本规定
+第一条 为了保护民事主体的合法权益，调整民事关系，维护社会和经济秩序，适应中国特色社会主义发展要求，弘扬社会主义核心价值观，根据宪法，制定本法。
+第二条 民法调整平等主体的自然人、法人和非法人组织之间的人身关系和财产关系。
+第三条 民事主体的人身权利、财产权利以及其他合法权益受法律保护，任何组织或者个人不得侵犯。
+第四条 民事主体在民事活动中的法律地位一律平等。
+第五条 民事主体从事民事活动，应当遵循自愿原则，按照自己的意思设立、变更、终止民事法律关系。
+第六条 民事主体从事民事活动，应当遵循公平原则，合理确定各方的权利和义务。
+第七条 民事主体从事民事活动，应当遵循诚信原则，秉持诚实，恪守承诺。
+第八条 民事主体从事民事活动，不得违反法律，不得违背公序良俗。
+
+第二章 自然人
+第一节 民事权利能力和民事行为能力
+第十三条 自然人从出生时起到死亡时止，具有民事权利能力，依法享有民事权利，承担民事义务。
+第十四条 自然人的民事权利能力一律平等。
+第十五条 自然人的出生时间和死亡时间，以出生证明、死亡证明记载的时间为准；没有出生证明、死亡证明的，以户籍登记或者其他有效身份登记记载的时间为准。
+第十六条 涉及遗产继承、接受赠与等胎儿利益保护的，胎儿视为具有民事权利能力。但是，胎儿娩出时为死体的，其民事权利能力自始不存在。
+第十八条 成年人为完全民事行为能力人，可以独立实施民事法律行为。十六周岁以上的未成年人，以自己的劳动收入为主要生活来源的，视为完全民事行为能力人。
+第十九条 八周岁以上的未成年人为限制民事行为能力人，实施民事法律行为由其法定代理人代理或者经其法定代理人同意、追认。
+
+----- test_files\案件材料\民事起诉状样本.md -----
+size_bytes=2361
+# 民事起诉状（样本）
+
+> 案由：买卖合同纠纷（样本·用于知识库测试，当事人为化名）
+
+## 当事人
+原告：甲商贸有限公司，住所地某市某区某路88号，法定代表人刘某，联系方式138********。
+被告：乙制造有限公司，住所地某市某区某工业园，法定代表人周某，联系方式139********。
+
+## 诉讼请求
+一、判令被告乙制造有限公司向原告甲商贸有限公司支付货款人民币35万元；
+二、判令被告支付以35万元为基数，自2023年8月1日起至实际付清之日止按全国银行间同业拆借中心公布的贷款市场报价利率（LPR）的4倍计算的违约金；
+三、本案诉讼费、保全费由被告负担。
+
+## 事实与理由
+2023年1月，原告与被告签订《产品买卖合同》，约定由原告向被告供应原材料，被告收货后30日内结清货款。合同签订后，原告依约于2023年3月至6月分批供货，并经被告签收确认，货款合计85万元。被告先后支付50万元，尚欠35万元至今未付。
+
+2023年7月，原告多次以函件、电话方式催告被告付款，被告以资金紧张为由拖延，至今未支付剩余货款35万元。被告的行为已构成严重违约，致使原告合法权益受到损害。
+
+《中华人民共和国民法典》第五百七十七条规定，当事人一方不履行合同义务或者履行合同义务不符合约定的，应当承担继续履行、采取补救措施或者赔偿损失等违约责任。第五百八十五条规定，当事人可以约定一方违约时应当根据违约情况向对方支付一定数额的违约金。合同明确约定了逾期付款违约金计算方式，原告的诉讼请求于法有据。
+
+综上，为维护原告合法权益，特依法提起诉讼，恳请人民法院依法判如所请。
+
+## 证据清单
+证据一：《产品买卖合同》原件一份，证明双方存在买卖合同关系及付款期限、违约金约定；
+证据二：送货单及签收凭证共十二份，证明原告已依约供货且被告签收；
+
+----- test_files\法律法规\劳动合同法.md -----
+size_bytes=2751
+# 中华人民共和国劳动合同法（节选）
+
+> 来源：《中华人民共和国劳动合同法》（2007年6月29日公布，2008年1月1日施行，2012年修正）。本件为重点条文节选，用于知识库检索测试。
+
+## 第一章 总则
+
+第二条 中华人民共和国境内的企业、个体经济组织、民办非企业单位等组织与劳动者建立劳动关系，订立、履行、变更、解除或者终止劳动合同，适用本法。
+
+第三条 订立劳动合同，应当遵循合法、公平、平等自愿、协商一致、诚实信用的原则。
+
+## 第二章 劳动合同的订立
+
+第七条 用人单位自用工之日起即与劳动者建立劳动关系。用人单位应当建立职工名册备查。
+
+第十条 建立劳动关系，应当订立书面劳动合同。已建立劳动关系，未同时订立书面劳动合同的，应当自用工之日起一个月内订立书面劳动合同。
+
+第十九条 劳动合同期限三个月以上不满一年的，试用期不得超过一个月；劳动合同期限一年以上不满三年的，试用期不得超过二个月；三年以上固定期限和无固定期限的劳动合同，试用期不得超过六个月。同一用人单位与同一劳动者只能约定一次试用期。
+
+第二十条 劳动者在试用期的工资不得低于本单位相同岗位最低档工资或者劳动合同约定工资的百分之八十，并不得低于用人单位所在地的最低工资标准。
+
+## 第四章 劳动合同的解除和终止
+
+第三十六条 用人单位与劳动者协商一致，可以解除劳动合同。
+
+第三十八条 用人单位有下列情形之一的，劳动者可以解除劳动合同：（一）未按照劳动合同约定提供劳动保护或者劳动条件的；（二）未及时足额支付劳动报酬的；（三）未依法为劳动者缴纳社会保险费的。
+
+----- test_files\判决案例\民间借贷纠纷判决书.md -----
+size_bytes=2761
+# 某市某区人民法院 民事判决书（样本）
+
+> 编号：（2024）某0102民初1234号（样本·用于知识库测试）
+> 案由：民间借贷纠纷
+> 当事人均为化名
+
+## 当事人
+原告：张某，男，1985年出生，住某市某区。
+被告：李某，女，1988年出生，住某市某区。
+
+## 诉讼请求
+原告张某向本院提出诉讼请求：1. 判令被告李某偿还借款本金人民币20万元；2. 判令被告支付自2023年6月1日起至实际清偿之日止按年利率6%计算的利息；3. 本案诉讼费由被告负担。
+
+## 查明事实
+本院经审理查明：2023年3月1日，被告李某因经营周转需要向原告张某借款20万元，并出具借条一份，约定借款期限为三个月，于2023年6月1日偿还，未约定借期内利息。原告于当日通过银行转账向被告交付20万元。借款到期后，被告未偿还本金。原告多次催要未果，遂诉至本院。
+
+上述事实有借条、银行转账凭证、当事人陈述等证据在卷佐证。
+
+## 本院认为
+合法的借贷关系受法律保护。原告张某与被告李某之间的民间借贷关系，有借条及转账凭证为证，意思表示真实，内容不违反法律强制性规定，合法有效。被告李某未按约定的期限返还借款，构成违约，应当承担继续履行、赔偿损失等违约责任。
+
+关于利息，根据《最高人民法院关于审理民间借贷案件适用法律若干问题的规定》，借贷双方既未约定借期内利息，也未约定逾期利息，出借人主张自逾期还款之日起参照当时一年期贷款市场报价利率（LPR）计算的利息承担逾期还款违约责任的，人民法院应予支持。原告主张按年利率6%计算，不超过法定上限，本院予以支持。
+
+## 判决主文
+依照《中华人民共和国民法典》第六百六十七条、第六百七十五条、第六百七十六条，《最高人民法院关于审理民间借贷案件适用法律若干问题的规定》相关条款，判决如下：
+
+----- test_files\法律法规\民法典合同编.md -----
+size_bytes=3110
+# 中华人民共和国民法典 合同编（节选）
+
+> 来源：《中华人民共和国民法典》（2020年5月28日公布，2021年1月1日施行）第三编 合同。本件为通则与典型条文节选，用于知识库检索测试。
+
+## 第一分编 通则
+
+### 第一章 一般规定
+
+第四百六十三条 本编调整因合同产生的民事关系。
+
+第四百六十四条 合同是民事主体之间设立、变更、终止民事法律关系的协议。婚姻、收养、监护等有关身份关系的协议，适用有关该身份关系的法律规定；没有规定的，可以根据其性质参照适用本编规定。
+
+第四百六十五条 依法成立的合同，受法律保护。依法成立的合同，仅对当事人具有法律约束力，但是法律另有规定的除外。
+
+### 第二章 合同的订立
+
+第四百六十九条 当事人订立合同，可以采用书面形式、口头形式或者其他形式。书面形式是合同书、信件、电报、电传、传真、电子数据交换、电子邮件等方式能够有形地表现所载内容，并可以随时调取查用的数据电文。
+
+第四百七十二条 要约是希望与他人订立合同的意思表示，该意思表示应当符合下列条件：（一）内容具体确定；（二）表明经受要约人承诺，要约人即受该意思表示约束。
+
+第四百七十九条 承诺是受要约人同意要约的意思表示。
+
+第四百八十三条 承诺生效时合同成立，但是法律另有规定或者当事人另有约定的除外。
+
+### 第三章 合同的效力
+
+----- test_files\法律法规\民法典侵权责任编.md -----
+size_bytes=3111
+# 中华人民共和国民法典 侵权责任编（节选）
+
+> 来源：《中华人民共和国民法典》第七编 侵权责任。本件为一般规定与典型侵权条文节选，用于知识库检索测试。
+
+## 第一章 一般规定
+
+第一千一百六十四条 本编调整侵害民事权益产生的民事关系。
+
+第一千一百六十五条 行为人因过错侵害他人民事权益造成损害的，应当承担侵权责任。依照法律规定推定行为人有过错，其不能证明自己没有过错的，应当承担侵权责任。
+
+第一千一百六十六条 行为人造成他人民事权益损害，不论行为人有无过错，法律规定应当承担侵权责任的，依照其规定。
+
+第一千一百六十七条 侵权行为危及他人人身、财产安全的，被侵权人有权请求侵权人承担停止侵害、排除妨碍、消除危险等侵权责任。
+
+第一千一百七十三条 被侵权人对同一损害的发生或者扩大有过错的，可以减轻侵权人的责任。
+
+## 第二章 损害赔偿
+
+第一千一百七十九条 侵害他人造成人身损害的，应当赔偿医疗费、护理费、交通费、营养费、住院伙食补助费等为治疗和康复支出的合理费用，以及因误工减少的收入。造成残疾的，还应当赔偿辅助器具费和残疾赔偿金；造成死亡的，还应当赔偿丧葬费和死亡赔偿金。
+
+第一千一百八十二条 侵害自然人人身权益造成财产损失的，按照被侵权人因此受到的损失或者侵权人因此获得的利益赔偿。
+
+第一千一百八十三条 侵害自然人人身权益造成严重精神损害的，被侵权人有权请求精神损害赔偿。
+
+## 第三章 责任主体的特殊规定
+
+----- test_files\工作资料\律师实务笔记.md -----
+size_bytes=3166
+# 律师实务工作笔记（诉讼时效与举证要点）
+
+> 本件为律所内部实务整理，用于知识库检索测试。内容不构成对具体案件的法律意见。
+
+## 一、诉讼时效要点
+
+根据《中华人民共和国民法典》第一百八十八条，向人民法院请求保护民事权利的诉讼时效期间为三年。法律另有规定的，依照其规定。诉讼时效期间自权利人知道或者应当知道权利受到损害以及义务人之日起计算。
+
+第一百八十九条规定，当事人约定同一债务分期履行的，诉讼时效期间自最后一期履行期限届满之日起计算。
+
+第一百九十五条规定，有下列情形之一的，诉讼时效中断，从中断、有关程序终结时起，诉讼时效期间重新计算：（一）权利人向义务人提出履行请求；（二）义务人同意履行义务；（三）权利人提起诉讼或者申请仲裁；（四）与提起诉讼或者申请仲裁具有同等效力的其他情形。
+
+实务提醒：超过诉讼时效起诉的，人民法院受理后对方当事人提出时效抗辩的，原告将丧失胜诉权。对长期未结债权，应当注意通过书面催收（保留函件、短信、邮件记录）等方式中断时效并留存证据。
+
+## 二、举证责任规则
+
+《中华人民共和国民事诉讼法》第六十七条规定，当事人对自己提出的主张，有责任提供证据，即"谁主张，谁举证"。
+
+《最高人民法院关于适用〈中华人民共和国民事诉讼法〉的解释》第九十条规定，当事人对自己提出的诉讼请求所依据的事实或者反驳对方诉讼请求所依据的事实，应当提供证据加以证明，但法律另有规定的除外。在作出判决前，当事人未能提供证据或者证据不足以证明其事实主张的，由负有举证证明责任的当事人承担不利的后果。
+
+实务提醒：合同纠纷中，主张权利一方应当举证证明合同关系成立（合同文本、履约记录）、对方违约事实、己方损失及因果关系。民间借贷纠纷中，出借人应当提供借据、收据、欠条等债权凭证以及款项交付凭证（银行转账记录），仅有借条而无交付凭证的，可能面临败诉风险。
+
+## 三、常见执业风险
+
+1. 立案审查：起诉应当有明确的被告、具体的诉讼请求和事实理由。被告身份信息不全的，可申请律师调查令调取户籍信息或工商登记信息。
+
+----- test_files\判决案例\劳动争议判决书.md -----
+size_bytes=3316
+# 某市某区人民法院 民事判决书（样本）
+
+> 编号：（2024）某0105民初5678号（样本·用于知识库测试）
+> 案由：劳动争议（追索加班费、经济补偿）
+> 当事人均为化名
+
+## 当事人
+原告：王某，女，1990年出生，原某科技有限公司员工。
+被告：某科技有限公司，住所地某市某区，法定代表人陈某。
+
+## 诉讼请求
+原告王某诉称：原告于2021年4月入职被告处，担任产品经理，月工资1.5万元。在职期间经常加班但被告未支付加班费。2024年1月，被告未与原告协商一致单方面解除劳动合同。请求：1. 判令被告支付2023年度加班费3.6万元；2. 判令被告支付违法解除劳动合同赔偿金9万元；3. 本案诉讼费由被告负担。
+
+## 查明事实
+本院经审理查明：原告王某于2021年4月12日入职被告某科技有限公司，双方签订书面劳动合同，约定月工资1.5万元，合同期三年。考勤记录显示，2023年度原告工作日延时加班及休息日加班合计约360小时，被告未安排补休，亦未支付加班费。2024年1月15日，被告以"业务调整"为由书面通知原告解除劳动合同，解除前未与原告协商，亦未履行通知工会的程序。
+
+上述事实有劳动合同、工资发放记录、考勤系统导出记录、解除劳动合同通知书、当事人陈述等证据在卷佐证。
+
+## 本院认为
+一、关于加班费。根据《中华人民共和国劳动法》第四十四条，安排劳动者延长工作时间的，支付不低于工资的百分之一百五十的工资报酬；休息日安排劳动者工作又不能安排补休的，支付不低于工资的百分之二百的工资报酬。本案中，被告未就考勤记录所反映的加班时间提供已支付加班费或安排补休的证据，应当承担举证不能的不利后果，原告主张加班费有事实和法律依据，本院予以支持。
+
+二、关于赔偿金。根据《中华人民共和国劳动合同法》第四十八条，用人单位违反本法规定解除或者终止劳动合同，劳动者要求继续履行合同的，应当继续履行；劳动者不要求继续履行或者已经不能继续履行的，用人单位应当依照本法第八十七条规定支付赔偿金。第八十七条规定，用人单位违反本法规定解除劳动合同的，依照本法第四十七条规定的经济补偿标准的二倍向劳动者支付赔偿金。被告单方解除劳动合同既无法定的解除情形，又未履行法定程序，构成违法解除，应当按经济补偿标准的二倍支付赔偿金。
+
+## 判决主文
+依照《中华人民共和国劳动法》第四十四条、《中华人民共和国劳动合同法》第四十八条、第八十七条之规定，判决如下：

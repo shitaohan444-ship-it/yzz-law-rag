@@ -1,0 +1,8 @@
+﻿===== R2-03 PRESIGNED URL SUMMARY =====
+PostgreSQL exit code：0
+Milvus exit code：0
+PostgreSQL zero matches：
+Milvus zero matches：
+
+PostgreSQL evidence：D:\law-rag-project\test-evidence\manual-rag-20260715-152640\R2-data-snapshot\R2-03-postgres-presigned-url-audit.txt
+Milvus evidence：D:\law-rag-project\test-evidence\manual-rag-20260715-152640\R2-data-snapshot\R2-03-milvus-presigned-url-audit.txt

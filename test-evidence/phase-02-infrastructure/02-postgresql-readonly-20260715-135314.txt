@@ -1,0 +1,111 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715135314
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 32920
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-02-infrastructure\02-postgresql-readonly-20260715-135314.txt
+PS D:\law-rag-project> Write-Host "`n===== PostgreSQL readiness ====="
+
+===== PostgreSQL readiness =====
+PS D:\law-rag-project> docker exec law-rag-postgres sh -lc `
+    'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+/var/run/postgresql:5432 - accepting connections
+PS D:\law-rag-project> $PgIsReadyExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== PostgreSQL read-only SQL audit ====="
+
+===== PostgreSQL read-only SQL audit =====
+PS D:\law-rag-project> $Sql = @'
+\pset pager off
+\set ON_ERROR_STOP on
+
+BEGIN TRANSACTION READ ONLY;
+
+SELECT
+    current_database() AS database_name,
+    current_user AS database_user,
+    current_setting('server_version') AS server_version,
+    pg_is_in_recovery() AS in_recovery,
+    current_setting('transaction_read_only') AS transaction_read_only;
+
+SELECT
+    pg_database_size(current_database()) AS database_size_bytes,
+    pg_size_pretty(pg_database_size(current_database())) AS database_size_pretty;
+
+SELECT
+    COUNT(*) AS current_database_connections
+FROM pg_stat_activity
+WHERE datname = current_database();
+
+SELECT
+    nspname AS schema_name
+FROM pg_namespace
+WHERE nspname NOT LIKE 'pg_%'
+  AND nspname <> 'information_schema'
+ORDER BY nspname;
+
+SELECT
+    table_schema,
+    COUNT(*) AS table_count
+FROM information_schema.tables
+WHERE table_type = 'BASE TABLE'
+  AND table_schema NOT IN (
+      'pg_catalog',
+      'information_schema'
+  )
+GROUP BY table_schema
+ORDER BY table_schema;
+
+WITH required_tables(schema_name, table_name) AS (
+    VALUES
+        ('oa', 'kb_document'),
+        ('oa', 'kb_document_image'),
+        ('oa', 'sys_attachment'),
+        ('oa', 'ai_chat_log')
+)
+SELECT
+    schema_name,
+    table_name,
+    to_regclass(
+        format('%I.%I', schema_name, table_name)
+    ) IS NOT NULL AS exists
+FROM required_tables
+ORDER BY schema_name, table_name;
+
+SELECT
+    extname AS extension_name,
+    extversion AS extension_version
+FROM pg_extension
+ORDER BY extname;
+
+ROLLBACK;
+'@
+PS D:\law-rag-project> $Sql |
+    docker exec -i law-rag-postgres sh -lc `
+        'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -X -P pager=off'
+
+PS D:\law-rag-project> $PostgresSqlExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== Exit code summary ====="
+
+===== Exit code summary =====
+PS D:\law-rag-project> Write-Host "PgIsReadyExitCode:" $PgIsReadyExitCode
+PgIsReadyExitCode: 0
+PS D:\law-rag-project> Write-Host "PostgresSqlExitCode:" $PostgresSqlExitCode
+PostgresSqlExitCode: 0
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715135316
+**********************

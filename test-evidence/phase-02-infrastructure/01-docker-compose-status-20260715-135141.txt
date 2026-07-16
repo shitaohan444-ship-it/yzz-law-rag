@@ -1,0 +1,139 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715135141
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 39164
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-02-infrastructure\01-docker-compose-status-20260715-135141.txt
+PS D:\law-rag-project> Write-Host "`n===== Docker engine connectivity ====="
+
+===== Docker engine connectivity =====
+PS D:\law-rag-project> docker version --format 'Client={{.Client.Version}} Server={{.Server.Version}}'
+Client=29.6.1 Server=29.6.1
+PS D:\law-rag-project> $DockerVersionExitCode = $LASTEXITCODE
+PS D:\law-rag-project> docker info --format 'ServerVersion={{.ServerVersion}} Containers={{.Containers}} Running={{.ContainersRunning}} Stopped={{.ContainersStopped}} Images={{.Images}}'
+ServerVersion=29.6.1 Containers=6 Running=5 Stopped=1 Images=9
+PS D:\law-rag-project> $DockerInfoExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== Discover compose files ====="
+
+===== Discover compose files =====
+PS D:\law-rag-project> $CandidateDirectories = @(
+    "D:\law-rag-project",
+    "D:\law-rag-project\law-rag-service",
+    "D:\law-rag-project\milvus-standalone"
+)
+PS D:\law-rag-project> $CandidateNames = @(
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml"
+)
+PS D:\law-rag-project> $ComposeFiles = @()
+PS D:\law-rag-project> foreach ($Directory in $CandidateDirectories) {
+    foreach ($Name in $CandidateNames) {
+        $Path = Join-Path $Directory $Name
+
+        if (Test-Path -LiteralPath $Path) {
+            $ComposeFiles += Get-Item -LiteralPath $Path
+        }
+    }
+}
+PS D:\law-rag-project> $ComposeFiles = @(
+    $ComposeFiles |
+        Sort-Object FullName -Unique
+)
+PS D:\law-rag-project> Write-Host "ComposeFileCount:" $ComposeFiles.Count
+ComposeFileCount: 1
+PS D:\law-rag-project> $ComposeFiles |
+    Select-Object FullName, Length, LastWriteTime |
+    Format-Table -AutoSize
+
+FullName                              Length LastWriteTime
+--------                              ------ -------------
+D:\law-rag-project\docker-compose.yml   5533 2026/7/15 11:26:46
+
+
+PS D:\law-rag-project> if ($ComposeFiles.Count -gt 0) {
+    Get-FileHash ($ComposeFiles.FullName) -Algorithm SHA256 |
+        Select-Object Path, Algorithm, Hash |
+        Format-Table -AutoSize
+}
+
+Path                                  Algorithm Hash
+----                                  --------- ----
+D:\law-rag-project\docker-compose.yml SHA256    28D99FDE42DC1C575B9E3F8F06BB9449F1489BA43583927B069848022B292D4D
+
+
+PS D:\law-rag-project> $ComposeResults = @()
+PS D:\law-rag-project> foreach ($ComposeFile in $ComposeFiles) {
+    Write-Host "`n========================================"
+    Write-Host "ComposeFile:" $ComposeFile.FullName
+    Write-Host "========================================"
+
+    Write-Host "`n--- Declared services ---"
+    docker compose -f $ComposeFile.FullName config --services
+    $ConfigExitCode = $LASTEXITCODE
+
+    Write-Host "`n--- Container status ---"
+    docker compose -f $ComposeFile.FullName ps --all
+    $PsExitCode = $LASTEXITCODE
+
+    $ComposeResults += [PSCustomObject]@{
+        ComposeFile   = $ComposeFile.FullName
+        ConfigExitCode = $ConfigExitCode
+        PsExitCode     = $PsExitCode
+    }
+}
+
+========================================
+ComposeFile: D:\law-rag-project\docker-compose.yml
+========================================
+
+--- Declared services ---
+
+
+--- Container status ---
+
+PS D:\law-rag-project> Write-Host "`n===== All Docker containers ====="
+
+===== All Docker containers =====
+PS D:\law-rag-project> docker ps --all --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+
+PS D:\law-rag-project> $DockerPsExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== Compose command results ====="
+
+===== Compose command results =====
+PS D:\law-rag-project> $ComposeResults |
+    Format-Table ComposeFile, ConfigExitCode, PsExitCode -AutoSize
+
+ComposeFile                           ConfigExitCode PsExitCode
+-----------                           -------------- ----------
+D:\law-rag-project\docker-compose.yml              0          0
+
+
+PS D:\law-rag-project> Write-Host "`n===== Exit code summary ====="
+
+===== Exit code summary =====
+PS D:\law-rag-project> Write-Host "DockerVersionExitCode:" $DockerVersionExitCode
+DockerVersionExitCode: 0
+PS D:\law-rag-project> Write-Host "DockerInfoExitCode:" $DockerInfoExitCode
+DockerInfoExitCode: 0
+PS D:\law-rag-project> Write-Host "DockerPsExitCode:" $DockerPsExitCode
+DockerPsExitCode: 0
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715135143
+**********************

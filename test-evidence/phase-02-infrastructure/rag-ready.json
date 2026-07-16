@@ -1,0 +1,1 @@
+﻿{"status":"ready","pg":"ok","minio":"ok","milvus":"ok","models":{"embedding":"ok","reranker":"ok"},"authentication":"disabled","vl_configured":true}

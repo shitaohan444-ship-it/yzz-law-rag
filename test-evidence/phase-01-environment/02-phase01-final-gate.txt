@@ -1,0 +1,15 @@
+﻿===== 第一阶段最终校验 =====
+测试时间：2026-07-15 15:11:20 +08:00
+
+[PASS] 默认 Python：Python 3.11.9
+[PASS] RAG Python 虚拟环境：Python 3.11.9
+[PASS] Node.js：v22.22.3
+[PASS] pnpm：10.32.0
+[PASS] Docker Engine：Server 29.6.1
+[PASS] Docker Compose 配置解析：当前 .env 可完整解析 docker-compose.yml
+[WARN] .env.example 键覆盖：以下键未声明，但 Compose 可使用默认值完成解析：APP_ENV, AUTH_ADMIN_ROLE_CODES, AUTH_ENABLED, CORS_ALLOWED_ORIGINS, EXPOSE_API_DOCS, MAX_REQUEST_BODY_BYTES, MINIO_PRESIGNED_EXPIRES_SECONDS, RAG_SERVICE_TOKEN, TRUSTED_HOSTS
+
+PASS：6
+WARN：1
+FAIL：0
+第一阶段最终结果：PASS_WITH_WARNINGS

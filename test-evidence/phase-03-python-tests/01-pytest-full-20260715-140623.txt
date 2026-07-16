@@ -1,0 +1,275 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715140624
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 28616
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-03-python-tests\01-pytest-full-20260715-140623.txt
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Python test inventory ====="
+
+===== Python test inventory =====
+PS D:\law-rag-project\law-rag-kb> $TestFiles = @(
+    Get-ChildItem `
+        -Path ".\tests" `
+        -Recurse `
+        -File `
+        -Filter "test_*.py"
+)
+PS D:\law-rag-project\law-rag-kb> Write-Host "TestFileCount:" $TestFiles.Count
+TestFileCount: 8
+PS D:\law-rag-project\law-rag-kb> $TestFiles |
+    Select-Object Name, FullName |
+    Format-Table -AutoSize
+
+Name                      FullName
+----                      --------
+test_api.py               D:\law-rag-project\law-rag-kb\tests\test_api.py
+test_chunker.py           D:\law-rag-project\law-rag-kb\tests\test_chunker.py
+test_document_markdown.py D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py
+test_llm.py               D:\law-rag-project\law-rag-kb\tests\test_llm.py
+test_markdown_pipeline.py D:\law-rag-project\law-rag-kb\tests\test_markdown_pipeline.py
+test_multimodal_ingest.py D:\law-rag-project\law-rag-kb\tests\test_multimodal_ingest.py
+test_reranker.py          D:\law-rag-project\law-rag-kb\tests\test_reranker.py
+test_retrieve.py          D:\law-rag-project\law-rag-kb\tests\test_retrieve.py
+
+
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== unittest style detection ====="
+
+===== unittest style detection =====
+PS D:\law-rag-project\law-rag-kb> $UnittestMatches = @(
+    $TestFiles |
+        Select-String -Pattern `
+            "import unittest|from unittest|unittest\.TestCase"
+)
+PS D:\law-rag-project\law-rag-kb> Write-Host "UnittestStyleMatchCount:" $UnittestMatches.Count
+UnittestStyleMatchCount: 35
+PS D:\law-rag-project\law-rag-kb> $UnittestMatches |
+    Select-Object Path, LineNumber, Line |
+    Format-Table -AutoSize
+
+Path                                                          LineNumber Line
+----                                                          ---------- ----
+D:\law-rag-project\law-rag-kb\tests\test_api.py                        1 import unittest
+D:\law-rag-project\law-rag-kb\tests\test_api.py                        2 from unittest.mock import patch
+D:\law-rag-project\law-rag-kb\tests\test_api.py                       13 class ApiContractTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_chunker.py                    1 import unittest
+D:\law-rag-project\law-rag-kb\tests\test_chunker.py                    6 class ArticleChunkingTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py          2 import unittest
+D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py          4 from unittest.mock import patch
+D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py         14 class ChunkerMarkdownTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py         39 class PresignedUrlTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py         55 class DescribeTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py         79 class RenderMarkdownTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py        124 class BuildMarkdownServiceTests(unittest.Te...
+D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py        154 class MarkdownApiTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_document_markdown.py        181 class IngestDescriptionDegradationTests(uni...
+D:\law-rag-project\law-rag-kb\tests\test_llm.py                        1 import unittest
+D:\law-rag-project\law-rag-kb\tests\test_llm.py                        3 from unittest.mock import patch
+D:\law-rag-project\law-rag-kb\tests\test_llm.py                        9 class OpenAICompatibleLlmTests(unittest.Tes...
+D:\law-rag-project\law-rag-kb\tests\test_markdown_pipeline.py          3 import unittest
+D:\law-rag-project\law-rag-kb\tests\test_markdown_pipeline.py          4 from unittest.mock import MagicMock, patch
+D:\law-rag-project\law-rag-kb\tests\test_markdown_pipeline.py         34 class ConversionTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_markdown_pipeline.py         76 class MarkdownChunkingTests(unittest.TestCa...
+D:\law-rag-project\law-rag-kb\tests\test_markdown_pipeline.py        275 class PipelineOrderTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_markdown_pipeline.py        337 class MarkdownReadTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_multimodal_ingest.py          3 import unittest
+D:\law-rag-project\law-rag-kb\tests\test_multimodal_ingest.py          4 from unittest.mock import patch
+D:\law-rag-project\law-rag-kb\tests\test_multimodal_ingest.py         47 class StructuredParserTests(unittest.TestCa...
+D:\law-rag-project\law-rag-kb\tests\test_multimodal_ingest.py         96 class CleaningAndPrefilterTests(unittest.Te...
+D:\law-rag-project\law-rag-kb\tests\test_multimodal_ingest.py        129 class JsonParserTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_multimodal_ingest.py        244 class VisionPolicyTests(unittest.TestCase):
+D:\law-rag-project\law-rag-kb\tests\test_reranker.py                   1 import unittest
+D:\law-rag-project\law-rag-kb\tests\test_reranker.py                   2 from unittest.mock import MagicMock, patch
+D:\law-rag-project\law-rag-kb\tests\test_reranker.py                   7 class RerankerBatchingTests(unittest.TestCa...
+D:\law-rag-project\law-rag-kb\tests\test_retrieve.py                   1 import unittest
+D:\law-rag-project\law-rag-kb\tests\test_retrieve.py                   2 from unittest.mock import patch
+D:\law-rag-project\law-rag-kb\tests\test_retrieve.py                   7 class LegalQueryNormalizationTests(unittest...
+
+
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Full pytest execution ====="
+
+===== Full pytest execution =====
+PS D:\law-rag-project\law-rag-kb> $env:PYTHONDONTWRITEBYTECODE = "1"
+PS D:\law-rag-project\law-rag-kb> & $Python -m pytest `
+    ".\tests" `
+    -vv `
+    -ra `
+    --tb=short `
+    --strict-markers `
+    --durations=10 `
+    --junitxml="$JunitFile" `
+    -p no:cacheprovider `
+    2>&1 |
+    Tee-Object -FilePath $PytestOutputFile
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.3, pluggy-1.6.0 -- D:\law-rag-project\law-rag-kb\.venv\Scripts\python.exe
+rootdir: D:\law-rag-project\law-rag-kb
+plugins: anyio-4.14.2
+collecting ... collected 80 items
+
+tests/test_api.py::ApiContractTests::test_chat_returns_answer_and_numbered_refs PASSED [  1%]
+tests/test_api.py::ApiContractTests::test_empty_search_and_chat_inputs_are_rejected PASSED [  2%]
+tests/test_api.py::ApiContractTests::test_existing_document_ingest_returns_success PASSED [  3%]
+tests/test_api.py::ApiContractTests::test_get_missing_document_returns_404 PASSED [  5%]
+tests/test_api.py::ApiContractTests::test_llm_provider_failure_returns_sanitized_502 PASSED [  6%]
+tests/test_api.py::ApiContractTests::test_non_not_found_ingest_failure_remains_business_response PASSED [  7%]
+tests/test_api.py::ApiContractTests::test_openapi_exposes_all_rag_routes PASSED [  8%]
+tests/test_api.py::ApiContractTests::test_post_ingest_missing_document_returns_404 PASSED [ 10%]
+tests/test_api.py::ApiContractTests::test_ready_returns_200_when_dependencies_and_models_exist PASSED [ 11%]
+tests/test_api.py::ApiContractTests::test_ready_returns_503_and_names_missing_models PASSED [ 12%]
+tests/test_api.py::ApiContractTests::test_search_serializes_article_metadata PASSED [ 13%]
+tests/test_api.py::ApiContractTests::test_search_serializes_image_reference_metadata PASSED [ 15%]
+tests/test_api.py::ApiContractTests::test_successful_document_without_force_returns_skipped PASSED [ 16%]
+tests/test_chunker.py::ArticleChunkingTests::test_article_metadata_matches_the_article_in_text PASSED [ 17%]
+tests/test_chunker.py::ArticleChunkingTests::test_article_references_in_notes_do_not_trigger_structured_chunking PASSED [ 18%]
+tests/test_chunker.py::ArticleChunkingTests::test_long_article_subchunks_keep_the_same_metadata PASSED [ 20%]
+tests/test_chunker.py::ArticleChunkingTests::test_part_chapter_section_article_metadata_uses_chapter_only PASSED [ 21%]
+tests/test_chunker.py::ArticleChunkingTests::test_short_articles_are_never_merged PASSED [ 22%]
+tests/test_chunker.py::ArticleChunkingTests::test_txt_part_chapter_section_article_all_become_markdown_headings PASSED [ 23%]
+tests/test_chunker.py::ArticleChunkingTests::test_unstructured_text_uses_recursive_fallback PASSED [ 25%]
+tests/test_document_markdown.py::ChunkerMarkdownTests::test_chapter_and_article_promoted_to_headings PASSED [ 26%]
+tests/test_document_markdown.py::ChunkerMarkdownTests::test_empty_text_returns_empty PASSED [ 27%]
+tests/test_document_markdown.py::ChunkerMarkdownTests::test_existing_markdown_heading_preserved PASSED [ 28%]
+tests/test_document_markdown.py::PresignedUrlTests::test_presigned_url_uses_bucket_and_expiry PASSED [ 30%]
+tests/test_document_markdown.py::DescribeTests::test_generate_description_degrades_on_failure PASSED [ 31%]
+tests/test_document_markdown.py::DescribeTests::test_generate_description_none_when_no_content PASSED [ 32%]
+tests/test_document_markdown.py::DescribeTests::test_generate_description_returns_text PASSED [ 33%]
+tests/test_document_markdown.py::RenderMarkdownTests::test_full_render_with_description_body_and_image PASSED [ 35%]
+tests/test_document_markdown.py::RenderMarkdownTests::test_presigned_failure_does_not_break_render PASSED [ 36%]
+tests/test_document_markdown.py::RenderMarkdownTests::test_render_without_description_or_images PASSED [ 37%]
+tests/test_document_markdown.py::BuildMarkdownServiceTests::test_build_markdown_assembles_sections PASSED [ 38%]
+tests/test_document_markdown.py::BuildMarkdownServiceTests::test_build_markdown_returns_none_when_missing PASSED [ 40%]
+tests/test_document_markdown.py::MarkdownApiTests::test_get_markdown_200 PASSED [ 41%]
+tests/test_document_markdown.py::MarkdownApiTests::test_get_markdown_404 PASSED [ 42%]
+tests/test_document_markdown.py::IngestDescriptionDegradationTests::test_generate_passes_through_none PASSED [ 43%]
+tests/test_document_markdown.py::IngestDescriptionDegradationTests::test_generate_returns_none_when_disabled PASSED [ 45%]
+tests/test_llm.py::OpenAICompatibleLlmTests::test_empty_model_response_is_an_error PASSED [ 46%]
+tests/test_llm.py::OpenAICompatibleLlmTests::test_provider_exception_is_sanitized PASSED [ 47%]
+tests/test_llm.py::OpenAICompatibleLlmTests::test_qwen_request_uses_limits_and_disables_thinking PASSED [ 48%]
+tests/test_markdown_pipeline.py::ConversionTests::test_docx_preserves_paragraph_table_image_order PASSED [ 50%]
+tests/test_markdown_pipeline.py::ConversionTests::test_native_markdown_plain_article_line_gets_metadata PASSED [ 51%]
+tests/test_markdown_pipeline.py::ConversionTests::test_native_markdown_preserves_structural_whitespace PASSED [ 52%]
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_filtered_image_is_removed PASSED [ 53%]
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_image_is_draft_after_split_and_not_last_article_metadata PASSED [ 55%]
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_long_image_description_repeats_image_reference PASSED [ 56%]
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_new_chapter_clears_previous_section_context PASSED [ 57%]
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_part_chapter_section_hierarchy_keeps_chapter_metadata PASSED [ 58%]
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_summary_is_independent_and_markdown_vectors_use_new_contract PASSED [ 60%]
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_switching_section_does_not_change_chapter PASSED [ 61%]
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_trailing_image_keeps_hierarchy_but_not_article_metadata PASSED [ 62%]
+tests/test_markdown_pipeline.py::MarkdownChunkingTests::test_vl_description_and_ocr_are_enriched_but_category_is_not PASSED [ 63%]
+tests/test_markdown_pipeline.py::PipelineOrderTests::test_ingest_splits_before_vl_and_embeds_after_enrichment PASSED [ 65%]
+tests/test_markdown_pipeline.py::MarkdownReadTests::test_llm_projection_removes_urls_but_keeps_description PASSED [ 66%]
+tests/test_multimodal_ingest.py::StructuredParserTests::test_docx_preserves_paragraph_and_image_order PASSED [ 67%]
+tests/test_multimodal_ingest.py::StructuredParserTests::test_pdf_keeps_text_page_and_embedded_image PASSED [ 68%]
+tests/test_multimodal_ingest.py::StructuredParserTests::test_scan_only_pdf_is_rendered_as_page_image PASSED [ 70%]
+tests/test_multimodal_ingest.py::StructuredParserTests::test_standalone_image_becomes_image_document PASSED [ 71%]
+tests/test_multimodal_ingest.py::CleaningAndPrefilterTests::test_cleaner_removes_repeated_header_footer_but_keeps_body PASSED [ 72%]
+tests/test_multimodal_ingest.py::CleaningAndPrefilterTests::test_duplicate_images_are_merged_with_all_pages PASSED [ 73%]
+tests/test_multimodal_ingest.py::CleaningAndPrefilterTests::test_solid_image_is_filtered_without_vl PASSED [ 75%]
+tests/test_multimodal_ingest.py::JsonParserTests::test_content_as_block_list_parses PASSED [ 76%]
+tests/test_multimodal_ingest.py::JsonParserTests::test_content_smart_quotes_are_preserved PASSED [ 77%]
+tests/test_multimodal_ingest.py::JsonParserTests::test_json_with_surrounding_explanation_parses PASSED [ 78%]
+tests/test_multimodal_ingest.py::JsonParserTests::test_markdown_code_fence_parses PASSED [ 80%]
+tests/test_multimodal_ingest.py::JsonParserTests::test_pure_json_object_parses PASSED [ 81%]
+tests/test_multimodal_ingest.py::JsonParserTests::test_raw_newline_inside_string_is_repaired PASSED [ 82%]
+tests/test_multimodal_ingest.py::JsonParserTests::test_smart_quote_delimiters_are_normalized PASSED [ 83%]
+tests/test_multimodal_ingest.py::JsonParserTests::test_trailing_comma_is_repaired PASSED [ 85%]
+tests/test_multimodal_ingest.py::JsonParserTests::test_truncated_json_raises_with_diagnostics PASSED [ 86%]
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_diagram_kept_even_when_model_says_drop PASSED [ 87%]
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_high_confidence_logo_is_not_searchable PASSED [ 88%]
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_image_description_uses_stable_independent_chunk PASSED [ 90%]
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_important_legal_image_is_always_kept PASSED [ 91%]
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_invalid_json_is_retried_once PASSED [ 92%]
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_text_is_still_ingested_when_vl_fails PASSED [ 93%]
+tests/test_multimodal_ingest.py::VisionPolicyTests::test_truncated_response_raises_sanitized_error PASSED [ 95%]
+tests/test_reranker.py::RerankerBatchingTests::test_length_sorted_batches_restore_original_score_order PASSED [ 96%]
+tests/test_retrieve.py::LegalQueryNormalizationTests::test_manufacturer_and_direct_liability_phrases_are_normalized
+tests/test_retrieve.py::LegalQueryNormalizationTests::test_manufacturer_and_direct_liability_phrases_are_normalized PASSED [ 97%]
+tests/test_retrieve.py::LegalQueryNormalizationTests::test_search_uses_original_query_for_recall_and_normalized_for_reranker PASSED [ 98%]
+tests/test_retrieve.py::LegalQueryNormalizationTests::test_unrelated_compensation_scope_query_is_not_rewritten PASSED [100%]
+
+============================== warnings summary ===============================
+.venv\Lib\site-packages\FlagEmbedding\BGE_M3\trainer.py:1
+  D:\law-rag-project\law-rag-kb\.venv\Lib\site-packages\FlagEmbedding\BGE_M3\trainer.py:1: DeprecationWarning: Importing from 'sentence_transformers.models' is deprecated and will be removed in a future version. Please use 'sentence_transformers.sentence_transformer.modules' instead.
+    from sentence_transformers import SentenceTransformer, models
+
+<frozen importlib._bootstrap>:241
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:241
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+- generated xml file: D:\law-rag-project\test-evidence\phase-03-python-tests\01-pytest-junit-20260715-140623.xml -
+============================ slowest 10 durations =============================
+1.06s call     tests/test_llm.py::OpenAICompatibleLlmTests::test_empty_model_response_is_an_error
+0.05s call     tests/test_multimodal_ingest.py::StructuredParserTests::test_docx_preserves_paragraph_and_image_order
+0.05s call     tests/test_markdown_pipeline.py::ConversionTests::test_docx_preserves_paragraph_table_image_order
+0.04s call     tests/test_multimodal_ingest.py::StructuredParserTests::test_pdf_keeps_text_page_and_embedded_image
+0.03s call     tests/test_api.py::ApiContractTests::test_openapi_exposes_all_rag_routes
+0.01s call     tests/test_api.py::ApiContractTests::test_chat_returns_answer_and_numbered_refs
+0.01s call     tests/test_api.py::ApiContractTests::test_empty_search_and_chat_inputs_are_rejected
+0.01s call     tests/test_multimodal_ingest.py::StructuredParserTests::test_scan_only_pdf_is_rendered_as_page_image
+0.01s call     tests/test_api.py::ApiContractTests::test_ready_returns_200_when_dependencies_and_models_exist
+0.01s call     tests/test_markdown_pipeline.py::PipelineOrderTests::test_ingest_splits_before_vl_and_embeds_after_enrichment
+============== 80 passed, 6 warnings, 5 subtests passed in 9.56s ==============
+python.exe : sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+At line:1 char:1
++ & $Python -m pytest `
++ ~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (sys:1: Deprecat...ule__ attribute:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+PS D:\law-rag-project\law-rag-kb> $PytestExitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Pytest exit code ====="
+
+===== Pytest exit code =====
+PS D:\law-rag-project\law-rag-kb> Write-Host "PytestExitCode:" $PytestExitCode
+PytestExitCode: 0
+PS D:\law-rag-project\law-rag-kb> Write-Host "PytestOutputFile:" $PytestOutputFile
+PytestOutputFile: D:\law-rag-project\test-evidence\phase-03-python-tests\01-pytest-output-20260715-140623.txt
+PS D:\law-rag-project\law-rag-kb> Write-Host "JunitFile:" $JunitFile
+JunitFile: D:\law-rag-project\test-evidence\phase-03-python-tests\01-pytest-junit-20260715-140623.xml
+PS D:\law-rag-project\law-rag-kb> Write-Host "JunitFileExists:" (Test-Path $JunitFile)
+JunitFileExists: True
+PS D:\law-rag-project\law-rag-kb> if (Test-Path $JunitFile) {
+    [xml]$JunitXml = Get-Content $JunitFile -Raw
+    $Suite = $JunitXml.testsuites
+
+    Write-Host "`n===== JUnit summary ====="
+    Write-Host "Tests:" $Suite.tests
+    Write-Host "Failures:" $Suite.failures
+    Write-Host "Errors:" $Suite.errors
+    Write-Host "Skipped:" $Suite.skipped
+    Write-Host "TimeSeconds:" $Suite.time
+}
+
+===== JUnit summary =====
+Tests:
+Failures:
+Errors:
+Skipped:
+TimeSeconds:
+PS D:\law-rag-project\law-rag-kb> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715140636
+**********************

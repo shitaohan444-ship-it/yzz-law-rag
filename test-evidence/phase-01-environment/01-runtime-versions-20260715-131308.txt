@@ -1,0 +1,109 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715131308
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 40216
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-01-environment\01-runtime-versions-20260715-131308.txt
+PS D:\law-rag-project> Write-Host "`n===== 测试时间与目录 ====="
+
+===== 测试时间与目录 =====
+PS D:\law-rag-project> Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
+2026-07-15 13:13:08 +08:00
+PS D:\law-rag-project> Get-Location
+
+Path
+----
+D:\law-rag-project
+
+
+PS D:\law-rag-project> Write-Host "`n===== PowerShell ====="
+
+===== PowerShell =====
+PS D:\law-rag-project> $PSVersionTable.PSVersion
+
+Major  Minor  Build  Revision
+-----  -----  -----  --------
+5      1      22621  4391
+
+
+PS D:\law-rag-project> Write-Host "`n===== 系统默认 Python ====="
+
+===== 系统默认 Python =====
+PS D:\law-rag-project> python --version
+
+PS D:\law-rag-project> Get-Command python | Select-Object Name, Source, Version
+
+Name       Source                             Version
+----       ------                             -------
+python.exe D:\programming\python11\python.exe 3.11.9150.1013
+
+
+PS D:\law-rag-project> Write-Host "`n===== RAG 项目虚拟环境 Python ====="
+
+===== RAG 项目虚拟环境 Python =====
+PS D:\law-rag-project> & ".\law-rag-kb\.venv\Scripts\python.exe" --version
+
+PS D:\law-rag-project> Get-Item ".\law-rag-kb\.venv\Scripts\python.exe" |
+    Select-Object FullName, Length, LastWriteTime
+
+FullName                                               Length LastWriteTime
+--------                                               ------ -------------
+D:\law-rag-project\law-rag-kb\.venv\Scripts\python.exe 274712 2026/7/13 9:45:59
+
+
+PS D:\law-rag-project> Write-Host "`n===== Node.js ====="
+
+===== Node.js =====
+PS D:\law-rag-project> node --version
+
+PS D:\law-rag-project> Get-Command node | Select-Object Name, Source, Version
+
+Name     Source                   Version
+----     ------                   -------
+node.exe D:\nvm4w\nodejs\node.exe 22.22.3.0
+
+
+PS D:\law-rag-project> Write-Host "`n===== pnpm ====="
+
+===== pnpm =====
+PS D:\law-rag-project> pnpm --version
+
+PS D:\law-rag-project> Get-Command pnpm | Select-Object Name, Source, Version
+
+Name     Source                            Version
+----     ------                            -------
+pnpm.ps1 D:\app\Nodejs\node_cache\pnpm.ps1
+
+
+PS D:\law-rag-project> Write-Host "`n===== Docker ====="
+
+===== Docker =====
+PS D:\law-rag-project> docker --version
+
+PS D:\law-rag-project> docker compose version
+
+PS D:\law-rag-project> Get-Command docker | Select-Object Name, Source, Version
+
+Name       Source                                                  Version
+----       ------                                                  -------
+docker.exe C:\Program Files\Docker\Docker\resources\bin\docker.exe 0.0.0.0
+
+
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715131309
+**********************

@@ -1,0 +1,49 @@
+# Secrets and local configuration
+.env
+**/.env
+!.env.example
+!**/.env.example
+.claude/settings.local.json
+
+# Python
+**/.venv/
+**/__pycache__/
+*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/*.egg-info/
+
+# Node
+**/node_modules/
+law-platform-api/dist/
+law-platform-web/dist/
+law-platform-web/coverage/
+law-platform-web/playwright-report/
+law-platform-web/test-results/
+.npm-cache/
+.pnpm-store/
+
+# Local models and persistent service data
+models/
+law-rag-service/data/
+milvus-standalone/volumes/
+output/
+
+# Local logs and temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+/PY
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini

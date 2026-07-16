@@ -1,0 +1,199 @@
+# 律所 RAG 项目统一基础设施编排（唯一入口）
+#
+# 包含：PostgreSQL、MinIO（业务 + Milvus 共用同一实例）、etcd、Milvus standalone、数据库迁移和 RAG API。
+# 历史上业务 MinIO 与 Milvus 内部 MinIO 是两套实例，现已合并：
+# Milvus 通过 service 名 `minio` 直连业务 MinIO，各用各的 bucket（业务 law-firm-files / Milvus 默认 bucket）。
+#
+# 启动：在项目根目录执行  docker compose up -d
+services:
+  postgres:
+    image: postgres:16
+    container_name: law-rag-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    volumes:
+      - ./law-rag-service/data/postgres:/var/lib/postgresql/data
+    networks:
+      - law-rag-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: law-rag-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - ./law-rag-service/data/minio:/data
+    networks:
+      - law-rag-net
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.25
+    restart: unless-stopped
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ./milvus-standalone/volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    networks:
+      - law-rag-net
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  standalone:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.6.19
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      # service 名 `minio` 即业务 MinIO（合并后唯一实例）；bucket 由 Milvus 自建默认 bucket，与业务 law-firm-files 互不干扰
+      MINIO_ADDRESS: minio:9000
+      # 业务 MinIO 密码为 minioadmin123（非 Milvus 默认 minioadmin），必须显式注入，否则连接失败
+      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      MQ_TYPE: woodpecker
+    volumes:
+      - ./milvus-standalone/volumes/milvus:/var/lib/milvus
+    ports:
+      - "127.0.0.1:19530:19530"
+      - "127.0.0.1:9091:9091"
+    networks:
+      - law-rag-net
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+
+  db-migrate:
+    build:
+      context: ./law-rag-service
+      dockerfile: Dockerfile.migrate
+    container_name: law-rag-db-migrate
+    restart: "no"
+    environment:
+      ALEMBIC_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?options=-c%20search_path%3Doa%2Cpublic
+    networks:
+      - law-rag-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  rag-api:
+    build:
+      context: ./law-rag-kb
+      dockerfile: Dockerfile
+    container_name: law-rag-kb
+    restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=512m
+    env_file:
+      - ./law-rag-kb/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MILVUS_HOST: standalone
+      MILVUS_PORT: 19530
+      EMBEDDING_MODEL: /models/bge-m3
+      RERANKER_MODEL: /models/bge-reranker-v2-m3
+      MODEL_DEVICE: cpu
+      KB_MARKDOWN_PIPELINE: "true"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      SEARCH_TIMING_ENABLED: ${SEARCH_TIMING_ENABLED:-false}
+      APP_ENV: ${APP_ENV:-development}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      RAG_SERVICE_TOKEN: ${RAG_SERVICE_TOKEN:-}
+      AUTH_ADMIN_ROLE_CODES: ${AUTH_ADMIN_ROLE_CODES:-rag_admin,system_admin,super_admin}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1,rag-api,law-rag-kb}
+      EXPOSE_API_DOCS: ${EXPOSE_API_DOCS:-true}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-1048576}
+      MINIO_PRESIGNED_EXPIRES_SECONDS: ${MINIO_PRESIGNED_EXPIRES_SECONDS:-300}
+    ports:
+      - "127.0.0.1:${KB_API_PORT:-8000}:8000"
+    volumes:
+      - type: bind
+        source: ${BGE_M3_HOST_PATH}
+        target: /models/bge-m3
+        read_only: true
+      - type: bind
+        source: ${RERANKER_HOST_PATH}
+        target: /models/bge-reranker-v2-m3
+        read_only: true
+    networks:
+      - law-rag-net
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+      standalone:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=5)
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+networks:
+  law-rag-net:
+    name: law-rag-net
+    driver: bridge

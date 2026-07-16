@@ -1,0 +1,9 @@
+﻿docker : ERROR:  syntax error at end of input
+At D:\law-rag-project\test-evidence\phase-02-infrastructure\01-infrastructure-audit.ps1:394 char:22
++     $PgQueryOutput = docker compose exec -T $PostgresService `
++                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR:  syntax error at end of input:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+LINE 1: SHOW
+            ^

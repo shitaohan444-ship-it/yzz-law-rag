@@ -1,0 +1,165 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715131454
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 40216
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-01-environment\02-python-dependencies-20260715-131454.txt
+PS D:\law-rag-project> Write-Host "`n===== 文件与解释器检查 ====="
+
+===== 文件与解释器检查 =====
+PS D:\law-rag-project> Write-Host "PythonExists:" (Test-Path $Python)
+PythonExists: True
+PS D:\law-rag-project> Write-Host "RequirementsExists:" (Test-Path $Requirements)
+RequirementsExists: True
+PS D:\law-rag-project> Get-FileHash $Requirements -Algorithm SHA256 |
+    Select-Object Path, Algorithm, Hash
+
+Path                                           Algorithm Hash
+----                                           --------- ----
+D:\law-rag-project\law-rag-kb\requirements.txt SHA256    C1F411A179099B08134716AF053C44FEFDA8D629355A05DC403E7CCCBE6...
+
+
+PS D:\law-rag-project> & $Python -m pip --version
+
+PS D:\law-rag-project> Write-Host "`n===== requirements.txt 逐项核对 ====="
+
+===== requirements.txt 逐项核对 =====
+PS D:\law-rag-project> @'
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+from pip._vendor.packaging.requirements import Requirement
+
+path = Path(r".\law-rag-kb\requirements.txt")
+failed = []
+checked = 0
+skipped = 0
+
+for line_no, raw in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+    line = raw.strip()
+
+    if not line or line.startswith("#"):
+        continue
+
+    if line.startswith(("-r ", "--", "-e ")):
+        print(f"[SKIP] line={line_no} directive")
+        skipped += 1
+        continue
+
+    line = line.split(" #", 1)[0].strip()
+
+    try:
+        req = Requirement(line)
+    except Exception as exc:
+        print(f"[PARSE-FAIL] line={line_no} type={type(exc).__name__}")
+        failed.append((line_no, "parse"))
+        continue
+
+    if req.marker and not req.marker.evaluate():
+        print(f"[SKIP] {req.name} marker_not_applicable")
+        skipped += 1
+        continue
+
+    checked += 1
+
+    try:
+        installed = version(req.name)
+    except PackageNotFoundError:
+        print(f"[MISSING] {req.name}")
+        failed.append((req.name, "missing"))
+        continue
+
+    compatible = not req.specifier or req.specifier.contains(
+        installed,
+        prereleases=True
+    )
+
+    status = "OK" if compatible else "VERSION-MISMATCH"
+    expected = str(req.specifier) if req.specifier else "(any)"
+    print(
+        f"[{status}] {req.name} "
+        f"installed={installed} required={expected}"
+    )
+
+    if not compatible:
+        failed.append((req.name, "version"))
+
+print(
+    f"SUMMARY checked={checked} skipped={skipped} "
+    f"failed={len(failed)}"
+)
+
+raise SystemExit(1 if failed else 0)
+'@ | & $Python -
+
+PS D:\law-rag-project> $RequirementsExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== pip 全局依赖一致性检查 ====="
+
+===== pip 全局依赖一致性检查 =====
+PS D:\law-rag-project> & $Python -m pip check
+
+PS D:\law-rag-project> $PipCheckExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== 保存无敏感值的包版本清单 ====="
+
+===== 保存无敏感值的包版本清单 =====
+PS D:\law-rag-project> & $Python -m pip list --format=json |
+    Set-Content -Path $InventoryFile -Encoding UTF8
+PS D:\law-rag-project> $Packages = Get-Content $InventoryFile -Raw | ConvertFrom-Json
+PS D:\law-rag-project> Write-Host "InstalledPackageCount:" $Packages.Count
+InstalledPackageCount: 112
+PS D:\law-rag-project> $KeyNames = @(
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "sqlalchemy",
+    "alembic",
+    "pymilvus",
+    "torch",
+    "FlagEmbedding",
+    "httpx",
+    "pytest"
+)
+PS D:\law-rag-project> $Packages |
+    Where-Object { $KeyNames -contains $_.name } |
+    Sort-Object name |
+    Format-Table name, version -AutoSize
+
+name          version
+----          -------
+fastapi       0.139.0
+FlagEmbedding 1.2.10
+httpx         0.28.1
+pydantic      2.13.4
+pymilvus      2.6.10
+pytest        9.0.3
+SQLAlchemy    2.0.51
+torch         2.13.0
+uvicorn       0.50.2
+
+
+PS D:\law-rag-project> Write-Host "`n===== 退出码汇总 ====="
+
+===== 退出码汇总 =====
+PS D:\law-rag-project> Write-Host "RequirementsExitCode:" $RequirementsExitCode
+RequirementsExitCode: 0
+PS D:\law-rag-project> Write-Host "PipCheckExitCode:" $PipCheckExitCode
+PipCheckExitCode: 0
+PS D:\law-rag-project> Write-Host "InventoryFile:" $InventoryFile
+InventoryFile: D:\law-rag-project\test-evidence\phase-01-environment\02-python-package-inventory-20260715-131454.json
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715131458
+**********************

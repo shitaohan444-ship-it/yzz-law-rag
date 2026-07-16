@@ -1,0 +1,327 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715131932
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 20896
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-01-environment\04-environment-completeness-20260715-131932.txt
+PS D:\law-rag-project> function Read-DotEnv {
+    param([string]$Path)
+
+    $Map = @{}
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $Map
+    }
+
+    foreach ($RawLine in Get-Content -LiteralPath $Path) {
+        $Line = $RawLine.Trim()
+
+        if (-not $Line -or $Line.StartsWith("#")) {
+            continue
+        }
+
+        if ($Line.StartsWith("export ")) {
+            $Line = $Line.Substring(7).Trim()
+        }
+
+        $Index = $Line.IndexOf("=")
+
+        if ($Index -le 0) {
+            continue
+        }
+
+        $Key = $Line.Substring(0, $Index).Trim()
+        $Value = $Line.Substring($Index + 1).Trim()
+
+        if ($Key -match "^[A-Za-z_][A-Za-z0-9_]*$") {
+            $Map[$Key] = $Value
+        }
+    }
+
+    return $Map
+}
+PS D:\law-rag-project> function Get-ValueStatus {
+    param([string]$Value)
+
+    $CleanValue = $Value.Trim().Trim('"').Trim("'")
+
+    if ([string]::IsNullOrWhiteSpace($CleanValue)) {
+        return "EMPTY"
+    }
+
+    $PlaceholderPattern =
+        "(?i)(change[_ -]?me|replace[_ -]?me|" +
+        "your[_ -]?(key|token|password|secret)|" +
+        "placeholder|请填写|你的.*(密钥|密码)|xxx+)"
+
+    if ($CleanValue -match $PlaceholderPattern) {
+        return "PLACEHOLDER"
+    }
+
+    return "SET"
+}
+PS D:\law-rag-project> $Targets = @(
+    [PSCustomObject]@{
+        Name      = "Python RAG"
+        Directory = "D:\law-rag-project\law-rag-kb"
+    },
+    [PSCustomObject]@{
+        Name      = "Node API"
+        Directory = "D:\law-rag-project\law-rag-api"
+    },
+    [PSCustomObject]@{
+        Name      = "Infrastructure"
+        Directory = "D:\law-rag-project\law-rag-service"
+    }
+)
+PS D:\law-rag-project> Write-Host "`n===== 环境文件清单（不读取显示实际值） ====="
+
+===== 环境文件清单（不读取显示实际值） =====
+PS D:\law-rag-project> foreach ($Target in $Targets) {
+    Write-Host "`n--- $($Target.Name) ---"
+
+    Get-ChildItem -LiteralPath $Target.Directory -Force -File |
+        Where-Object { $_.Name -like ".env*" } |
+        Select-Object Name, Length, LastWriteTime
+}
+
+--- Python RAG ---
+
+
+--- Node API ---
+
+--- Infrastructure ---
+Name         Length LastWriteTime
+----         ------ -------------
+.env           1754 2026/7/13 17:31:40
+.env.example   3047 2026/7/15 11:40:11
+.env            322 2026/7/11 22:22:20
+.env            461 2026/7/10 10:29:13
+
+
+PS D:\law-rag-project> $Results = @()
+PS D:\law-rag-project> Write-Host "`n===== .env 与 .env.example 键名比较 ====="
+
+===== .env 与 .env.example 键名比较 =====
+PS D:\law-rag-project> foreach ($Target in $Targets) {
+    $EnvPath = Join-Path $Target.Directory ".env"
+    $ExamplePath = Join-Path $Target.Directory ".env.example"
+
+    $EnvExists = Test-Path -LiteralPath $EnvPath
+    $ExampleExists = Test-Path -LiteralPath $ExamplePath
+
+    Write-Host "`n--- $($Target.Name) ---"
+    Write-Host "EnvExists:" $EnvExists
+    Write-Host "ExampleExists:" $ExampleExists
+
+    $Actual = Read-DotEnv -Path $EnvPath
+    $Example = Read-DotEnv -Path $ExamplePath
+
+    if ($ExampleExists) {
+        foreach ($Key in ($Example.Keys | Sort-Object)) {
+            if ($Actual.ContainsKey($Key)) {
+                $Status = Get-ValueStatus -Value $Actual[$Key]
+            }
+            else {
+                $ProcessValue = [Environment]::GetEnvironmentVariable($Key)
+
+                if ([string]::IsNullOrWhiteSpace($ProcessValue)) {
+                    $Status = "MISSING"
+                }
+                else {
+                    $Status = "PROCESS_SET"
+                }
+            }
+
+            $Results += [PSCustomObject]@{
+                Target = $Target.Name
+                Key    = $Key
+                Status = $Status
+                Source = "example-baseline"
+            }
+        }
+
+        foreach ($Key in ($Actual.Keys | Sort-Object)) {
+            if (-not $Example.ContainsKey($Key)) {
+                $Results += [PSCustomObject]@{
+                    Target = $Target.Name
+                    Key    = $Key
+                    Status = Get-ValueStatus -Value $Actual[$Key]
+                    Source = "extra-in-env"
+                }
+            }
+        }
+    }
+    elseif ($EnvExists) {
+        foreach ($Key in ($Actual.Keys | Sort-Object)) {
+            $Results += [PSCustomObject]@{
+                Target = $Target.Name
+                Key    = $Key
+                Status = Get-ValueStatus -Value $Actual[$Key]
+                Source = "no-example-baseline"
+            }
+        }
+    }
+    else {
+        $Results += [PSCustomObject]@{
+            Target = $Target.Name
+            Key    = "(environment file)"
+            Status = "NO_ENV_OR_EXAMPLE"
+            Source = "file-check"
+        }
+    }
+}
+
+--- Python RAG ---
+EnvExists: True
+ExampleExists: True
+
+--- Node API ---
+EnvExists: True
+ExampleExists: False
+
+--- Infrastructure ---
+EnvExists: True
+ExampleExists: False
+PS D:\law-rag-project> $Results |
+    Sort-Object Target, Source, Key |
+    Format-Table Target, Key, Status, Source -AutoSize
+
+Target         Key                      Status  Source
+------         ---                      ------  ------
+Infrastructure ENV                      SET     no-example-baseline
+Infrastructure MINIO_API_PORT           SET     no-example-baseline
+Infrastructure MINIO_BUCKET_NAME        SET     no-example-baseline
+Infrastructure MINIO_CONSOLE_PORT       SET     no-example-baseline
+Infrastructure MINIO_HOST               SET     no-example-baseline
+Infrastructure MINIO_ROOT_PASSWORD      SET     no-example-baseline
+Infrastructure MINIO_ROOT_USER          SET     no-example-baseline
+Infrastructure MINIO_SECURE             SET     no-example-baseline
+Infrastructure POSTGRES_DB              SET     no-example-baseline
+Infrastructure POSTGRES_PASSWORD        SET     no-example-baseline
+Infrastructure POSTGRES_PORT            SET     no-example-baseline
+Infrastructure POSTGRES_USER            SET     no-example-baseline
+Infrastructure PROJECT_NAME             SET     no-example-baseline
+Node API       DATABASE_URL             SET     no-example-baseline
+Node API       MINIO_ACCESS_KEY         SET     no-example-baseline
+Node API       MINIO_BUCKET             SET     no-example-baseline
+Node API       MINIO_ENDPOINT           SET     no-example-baseline
+Node API       MINIO_PORT               SET     no-example-baseline
+Node API       MINIO_SECRET_KEY         SET     no-example-baseline
+Node API       MINIO_USE_SSL            SET     no-example-baseline
+Node API       NODE_ENV                 SET     no-example-baseline
+Node API       PORT                     SET     no-example-baseline
+Python RAG     CHAT_MAX_CONTEXT_CHARS   SET     example-baseline
+Python RAG     CHAT_TOP_K               SET     example-baseline
+Python RAG     CHUNK_BY_ARTICLE         SET     example-baseline
+Python RAG     CHUNK_OVERLAP            SET     example-baseline
+Python RAG     CHUNK_SIZE               SET     example-baseline
+Python RAG     DENSE_WEIGHT             MISSING example-baseline
+Python RAG     EMBEDDING_BATCH_SIZE     SET     example-baseline
+Python RAG     EMBEDDING_MAX_SEQ_LEN    SET     example-baseline
+Python RAG     EMBEDDING_MODEL          SET     example-baseline
+Python RAG     HNSW_EF                  MISSING example-baseline
+Python RAG     HYBRID_RANKER            MISSING example-baseline
+Python RAG     KB_API_PORT              SET     example-baseline
+Python RAG     LLM_ENABLE_THINKING      SET     example-baseline
+Python RAG     LLM_MAX_RETRIES          SET     example-baseline
+Python RAG     LLM_MAX_TOKENS           SET     example-baseline
+Python RAG     LLM_PROVIDER             SET     example-baseline
+Python RAG     LLM_TEMPERATURE          SET     example-baseline
+Python RAG     LLM_TIMEOUT_SECONDS      SET     example-baseline
+Python RAG     MILVUS_COLLECTION        SET     example-baseline
+Python RAG     MILVUS_HOST              SET     example-baseline
+Python RAG     MILVUS_PORT              SET     example-baseline
+Python RAG     MINIO_ACCESS_KEY         SET     example-baseline
+Python RAG     MINIO_BUCKET             SET     example-baseline
+Python RAG     MINIO_ENDPOINT           SET     example-baseline
+Python RAG     MINIO_PORT               SET     example-baseline
+Python RAG     MINIO_SECRET_KEY         SET     example-baseline
+Python RAG     MINIO_USE_SSL            SET     example-baseline
+Python RAG     MODEL_DEVICE             SET     example-baseline
+Python RAG     PDF_RENDER_SCALE         MISSING example-baseline
+Python RAG     PG_SCHEMA                SET     example-baseline
+Python RAG     POSTGRES_DB              SET     example-baseline
+Python RAG     POSTGRES_HOST            SET     example-baseline
+Python RAG     POSTGRES_PASSWORD        SET     example-baseline
+Python RAG     POSTGRES_PORT            SET     example-baseline
+Python RAG     POSTGRES_USER            SET     example-baseline
+Python RAG     RERANK_BATCH_SIZE        MISSING example-baseline
+Python RAG     RERANK_MIN_SCORE         MISSING example-baseline
+Python RAG     RERANK_TOP_K             MISSING example-baseline
+Python RAG     RERANKER_MODEL           SET     example-baseline
+Python RAG     RRF_K                    MISSING example-baseline
+Python RAG     SCAN_PAGE_MIN_TEXT_CHARS MISSING example-baseline
+Python RAG     SEARCH_TIMING_ENABLED    MISSING example-baseline
+Python RAG     SEARCH_TOP_K             MISSING example-baseline
+Python RAG     SPARSE_WEIGHT            MISSING example-baseline
+Python RAG     VL_API_BASE              MISSING example-baseline
+Python RAG     VL_API_KEY               MISSING example-baseline
+Python RAG     VL_CONCURRENCY           MISSING example-baseline
+Python RAG     VL_ENABLED               MISSING example-baseline
+Python RAG     VL_FILTER_CONFIDENCE     MISSING example-baseline
+Python RAG     VL_MAX_OUTPUT_TOKENS     MISSING example-baseline
+Python RAG     VL_MAX_RETRIES           MISSING example-baseline
+Python RAG     VL_MODEL                 MISSING example-baseline
+Python RAG     VL_NEARBY_TEXT_CHARS     MISSING example-baseline
+Python RAG     VL_PROMPT_VERSION        MISSING example-baseline
+Python RAG     VL_TIMEOUT_SECONDS       MISSING example-baseline
+Python RAG     LLM_API_BASE             SET     extra-in-env
+Python RAG     LLM_API_KEY              SET     extra-in-env
+Python RAG     LLM_MODEL                SET     extra-in-env
+
+
+PS D:\law-rag-project> Write-Host "`n===== 状态统计 ====="
+
+===== 状态统计 =====
+PS D:\law-rag-project> $Results |
+    Group-Object Target, Status |
+    Sort-Object Name |
+    Select-Object Name, Count |
+    Format-Table -AutoSize
+
+Name                Count
+----                -----
+Infrastructure, SET    13
+Node API, SET           9
+Python RAG, MISSING    23
+Python RAG, SET        35
+
+
+PS D:\law-rag-project> $Results |
+    ConvertTo-Json -Depth 4 |
+    Set-Content -Path $JsonFile -Encoding UTF8
+PS D:\law-rag-project> $BlockingCount = @(
+    $Results | Where-Object {
+        $_.Status -in @(
+            "MISSING",
+            "EMPTY",
+            "PLACEHOLDER",
+            "NO_ENV_OR_EXAMPLE"
+        )
+    }
+).Count
+PS D:\law-rag-project> Write-Host "PotentialIssueCount:" $BlockingCount
+PotentialIssueCount: 23
+PS D:\law-rag-project> Write-Host "注意：EMPTY 是否真正失败，需要结合变量是否可选判断。"
+注意：EMPTY 是否真正失败，需要结合变量是否可选判断。
+PS D:\law-rag-project> Write-Host "JsonFile:" $JsonFile
+JsonFile: D:\law-rag-project\test-evidence\phase-01-environment\04-environment-completeness-20260715-131932.json
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715131933
+**********************

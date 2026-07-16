@@ -1,0 +1,167 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715140342
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 36592
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-02-infrastructure\07-alembic-version-20260715-140341.txt
+PS D:\law-rag-project> Write-Host "`n===== Database alembic_version ====="
+
+===== Database alembic_version =====
+PS D:\law-rag-project> $RevisionSql = @'
+\pset pager off
+\set ON_ERROR_STOP on
+BEGIN TRANSACTION READ ONLY;
+SELECT version_num FROM alembic_version;
+ROLLBACK;
+'@
+PS D:\law-rag-project> $DatabaseRevisionOutput = @(
+    $RevisionSql |
+        docker exec -i law-rag-postgres sh -lc `
+            'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -X -tA'
+)
+PS D:\law-rag-project> $DatabaseRevisionExitCode = $LASTEXITCODE
+PS D:\law-rag-project> $DatabaseRevisionOutput
+Pager usage is off.
+BEGIN
+a1b2c3d4e5f6
+ROLLBACK
+PS D:\law-rag-project> Write-Host "`n===== Alembic current ====="
+
+===== Alembic current =====
+PS D:\law-rag-project> $AlembicCurrentOutput = @(
+    docker compose run `
+        --rm `
+        --no-deps `
+        --entrypoint alembic `
+        db-migrate `
+        current 2>&1
+)
+PS D:\law-rag-project> $AlembicCurrentExitCode = $LASTEXITCODE
+PS D:\law-rag-project> $AlembicCurrentOutput
+docker :  Container law-rag-minio Running
+At line:2 char:5
++     docker compose run `
++     ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Container law-rag-minio Running :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+ Container milvus-etcd Running
+ Container law-rag-kb Running
+ Container milvus-standalone Running
+ Container law-rag-postgres Running
+ Container law-rag-project-db-migrate-run-d7657ad7a36b Creating
+ Container law-rag-project-db-migrate-run-d7657ad7a36b Created
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+a1b2c3d4e5f6 (head)
+PS D:\law-rag-project> Write-Host "`n===== Alembic heads ====="
+
+===== Alembic heads =====
+PS D:\law-rag-project> $AlembicHeadsOutput = @(
+    docker compose run `
+        --rm `
+        --no-deps `
+        --entrypoint alembic `
+        db-migrate `
+        heads 2>&1
+)
+PS D:\law-rag-project> $AlembicHeadsExitCode = $LASTEXITCODE
+PS D:\law-rag-project> $AlembicHeadsOutput
+docker :  Container law-rag-postgres Running
+At line:2 char:5
++     docker compose run `
++     ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( Container law-rag-postgres Running :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+ Container law-rag-minio Running
+ Container milvus-etcd Running
+ Container law-rag-kb Running
+ Container milvus-standalone Running
+ Container law-rag-project-db-migrate-run-e8d2c5f352bb Creating
+ Container law-rag-project-db-migrate-run-e8d2c5f352bb Created
+a1b2c3d4e5f6 (head)
+PS D:\law-rag-project> Write-Host "`n===== Revision comparison ====="
+
+===== Revision comparison =====
+PS D:\law-rag-project> $RevisionPattern = '\b[0-9a-f]{12}\b'
+PS D:\law-rag-project> $DatabaseRevisions = @(
+    [regex]::Matches(
+        ($DatabaseRevisionOutput -join "`n"),
+        $RevisionPattern
+    ) |
+        ForEach-Object { $_.Value } |
+        Sort-Object -Unique
+)
+PS D:\law-rag-project> $CurrentRevisions = @(
+    [regex]::Matches(
+        ($AlembicCurrentOutput -join "`n"),
+        $RevisionPattern
+    ) |
+        ForEach-Object { $_.Value } |
+        Sort-Object -Unique
+)
+PS D:\law-rag-project> $HeadRevisions = @(
+    [regex]::Matches(
+        ($AlembicHeadsOutput -join "`n"),
+        $RevisionPattern
+    ) |
+        ForEach-Object { $_.Value } |
+        Sort-Object -Unique
+)
+PS D:\law-rag-project> Write-Host "DatabaseRevisionCount:" $DatabaseRevisions.Count
+DatabaseRevisionCount: 1
+PS D:\law-rag-project> Write-Host "DatabaseRevisions:" ($DatabaseRevisions -join ",")
+DatabaseRevisions: a1b2c3d4e5f6
+PS D:\law-rag-project> Write-Host "CurrentRevisionCount:" $CurrentRevisions.Count
+CurrentRevisionCount: 2
+PS D:\law-rag-project> Write-Host "CurrentRevisions:" ($CurrentRevisions -join ",")
+CurrentRevisions: a1b2c3d4e5f6,d7657ad7a36b
+PS D:\law-rag-project> Write-Host "HeadRevisionCount:" $HeadRevisions.Count
+HeadRevisionCount: 2
+PS D:\law-rag-project> Write-Host "HeadRevisions:" ($HeadRevisions -join ",")
+HeadRevisions: a1b2c3d4e5f6,e8d2c5f352bb
+PS D:\law-rag-project> $RevisionMatch = (
+    $DatabaseRevisions.Count -eq 1 -and
+    $CurrentRevisions.Count -eq 1 -and
+    $HeadRevisions.Count -eq 1 -and
+    $DatabaseRevisions[0] -eq $CurrentRevisions[0] -and
+    $CurrentRevisions[0] -eq $HeadRevisions[0]
+)
+PS D:\law-rag-project> Write-Host "RevisionMatch:" $RevisionMatch
+RevisionMatch: False
+PS D:\law-rag-project> Write-Host "`n===== Exit code summary ====="
+
+===== Exit code summary =====
+PS D:\law-rag-project> Write-Host "DatabaseRevisionExitCode:" $DatabaseRevisionExitCode
+DatabaseRevisionExitCode: 0
+PS D:\law-rag-project> Write-Host "AlembicCurrentExitCode:" $AlembicCurrentExitCode
+AlembicCurrentExitCode: 0
+PS D:\law-rag-project> Write-Host "AlembicHeadsExitCode:" $AlembicHeadsExitCode
+AlembicHeadsExitCode: 0
+PS D:\law-rag-project> $AlembicOverallPass = (
+    $DatabaseRevisionExitCode -eq 0 -and
+    $AlembicCurrentExitCode -eq 0 -and
+    $AlembicHeadsExitCode -eq 0 -and
+    $RevisionMatch
+)
+PS D:\law-rag-project> Write-Host "AlembicOverallPass:" $AlembicOverallPass
+AlembicOverallPass: False
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715140346
+**********************

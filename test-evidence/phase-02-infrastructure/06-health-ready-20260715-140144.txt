@@ -1,0 +1,172 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715140144
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 11824
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-02-infrastructure\06-health-ready-20260715-140144.txt
+PS D:\law-rag-project> function Invoke-JsonEndpoint {
+    param(
+        [string]$Name,
+        [string]$Uri,
+        [int]$TimeoutSec
+    )
+
+    $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+    try {
+        $Response = Invoke-WebRequest `
+            -Uri $Uri `
+            -Method Get `
+            -UseBasicParsing `
+            -TimeoutSec $TimeoutSec
+
+        $Stopwatch.Stop()
+
+        return [PSCustomObject]@{
+            Name       = $Name
+            Uri        = $Uri
+            StatusCode = $Response.StatusCode
+            DurationMs = $Stopwatch.ElapsedMilliseconds
+            Content    = $Response.Content
+            ErrorType  = ""
+        }
+    }
+    catch {
+        $Stopwatch.Stop()
+
+        $StatusCode = 0
+
+        if ($null -ne $_.Exception.Response) {
+            $StatusCode = [int]$_.Exception.Response.StatusCode
+        }
+
+        return [PSCustomObject]@{
+            Name       = $Name
+            Uri        = $Uri
+            StatusCode = $StatusCode
+            DurationMs = $Stopwatch.ElapsedMilliseconds
+            Content    = ""
+            ErrorType  = $_.Exception.GetType().Name
+        }
+    }
+}
+PS D:\law-rag-project> Write-Host "`n===== GET /health ====="
+
+===== GET /health =====
+PS D:\law-rag-project> $HealthResult = Invoke-JsonEndpoint `
+    -Name "health" `
+    -Uri "http://127.0.0.1:8000/health" `
+    -TimeoutSec 30
+PS D:\law-rag-project> Write-Host "HealthStatusCode:" $HealthResult.StatusCode
+HealthStatusCode: 200
+PS D:\law-rag-project> Write-Host "HealthDurationMs:" $HealthResult.DurationMs
+HealthDurationMs: 46
+PS D:\law-rag-project> Write-Host "HealthErrorType:" $HealthResult.ErrorType
+HealthErrorType:
+PS D:\law-rag-project> $HealthJson = $null
+PS D:\law-rag-project> if ($HealthResult.Content) {
+    $HealthResult.Content |
+        Set-Content -Path $HealthJsonFile -Encoding UTF8
+
+    try {
+        $HealthJson = $HealthResult.Content | ConvertFrom-Json
+        $HealthJson | ConvertTo-Json -Depth 6
+    }
+    catch {
+        Write-Host "HealthJsonParse: FAIL"
+        Write-Host "HealthJsonErrorType:" $_.Exception.GetType().Name
+    }
+}
+{
+    "pg":  "ok",
+    "minio":  "ok",
+    "milvus":  "ok",
+    "vl_configured":  true
+}
+PS D:\law-rag-project> Write-Host "`n===== GET /ready ====="
+
+===== GET /ready =====
+PS D:\law-rag-project> $ReadyResult = Invoke-JsonEndpoint `
+    -Name "ready" `
+    -Uri "http://127.0.0.1:8000/ready" `
+    -TimeoutSec 180
+PS D:\law-rag-project> Write-Host "ReadyStatusCode:" $ReadyResult.StatusCode
+ReadyStatusCode: 200
+PS D:\law-rag-project> Write-Host "ReadyDurationMs:" $ReadyResult.DurationMs
+ReadyDurationMs: 21
+PS D:\law-rag-project> Write-Host "ReadyErrorType:" $ReadyResult.ErrorType
+ReadyErrorType:
+PS D:\law-rag-project> $ReadyJson = $null
+PS D:\law-rag-project> if ($ReadyResult.Content) {
+    $ReadyResult.Content |
+        Set-Content -Path $ReadyJsonFile -Encoding UTF8
+
+    try {
+        $ReadyJson = $ReadyResult.Content | ConvertFrom-Json
+        $ReadyJson | ConvertTo-Json -Depth 6
+    }
+    catch {
+        Write-Host "ReadyJsonParse: FAIL"
+        Write-Host "ReadyJsonErrorType:" $_.Exception.GetType().Name
+    }
+}
+{
+    "status":  "ready",
+    "pg":  "ok",
+    "minio":  "ok",
+    "milvus":  "ok",
+    "models":  {
+                   "embedding":  "ok",
+                   "reranker":  "ok"
+               },
+    "vl_configured":  true
+}
+PS D:\law-rag-project> Write-Host "`n===== Semantic assertions ====="
+
+===== Semantic assertions =====
+PS D:\law-rag-project> $HealthSemanticPass = (
+    $HealthResult.StatusCode -eq 200 -and
+    $null -ne $HealthJson -and
+    $HealthJson.pg -eq "ok" -and
+    $HealthJson.minio -eq "ok" -and
+    $HealthJson.milvus -eq "ok"
+)
+PS D:\law-rag-project> $ReadySemanticPass = (
+    $ReadyResult.StatusCode -eq 200 -and
+    $null -ne $ReadyJson -and
+    $ReadyJson.status -eq "ready" -and
+    $ReadyJson.embedding -eq "ok" -and
+    $ReadyJson.reranker -eq "ok"
+)
+PS D:\law-rag-project> Write-Host "HealthSemanticPass:" $HealthSemanticPass
+HealthSemanticPass: True
+PS D:\law-rag-project> Write-Host "ReadySemanticPass:" $ReadySemanticPass
+ReadySemanticPass: False
+PS D:\law-rag-project> $OverallPass = $HealthSemanticPass -and $ReadySemanticPass
+PS D:\law-rag-project> Write-Host "HealthReadyOverallPass:" $OverallPass
+HealthReadyOverallPass: False
+PS D:\law-rag-project> Write-Host "`n===== Evidence files ====="
+
+===== Evidence files =====
+PS D:\law-rag-project> Write-Host "HealthJsonFile:" $HealthJsonFile
+HealthJsonFile: D:\law-rag-project\test-evidence\phase-02-infrastructure\06-health-20260715-140144.json
+PS D:\law-rag-project> Write-Host "ReadyJsonFile:" $ReadyJsonFile
+ReadyJsonFile: D:\law-rag-project\test-evidence\phase-02-infrastructure\06-ready-20260715-140144.json
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715140144
+**********************

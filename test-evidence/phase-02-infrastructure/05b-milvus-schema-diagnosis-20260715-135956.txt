@@ -1,0 +1,243 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715135956
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 33684
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-02-infrastructure\05b-milvus-schema-diagnosis-20260715-135956.txt
+PS D:\law-rag-project> Write-Host "`n===== Source schema definitions ====="
+
+===== Source schema definitions =====
+PS D:\law-rag-project> $SchemaMatches = @(
+    Get-ChildItem `
+        -Path ".\law-rag-kb\app" `
+        -Recurse `
+        -File `
+        -Filter "*.py" |
+    Select-String -Pattern `
+        "FieldSchema|CollectionSchema|FLOAT_VECTOR|SPARSE_FLOAT_VECTOR"
+)
+PS D:\law-rag-project> Write-Host "SchemaDefinitionMatchCount:" $SchemaMatches.Count
+SchemaDefinitionMatchCount: 2
+PS D:\law-rag-project> $SchemaMatches |
+    Select-Object Path, LineNumber, Line |
+    Format-List
+
+
+Path       : D:\law-rag-project\law-rag-kb\app\core\milvus_client.py
+LineNumber : 47
+Line       :     schema.add_field("dense", DataType.FLOAT_VECTOR, dim=_DENSE_DIM)
+
+Path       : D:\law-rag-project\law-rag-kb\app\core\milvus_client.py
+LineNumber : 48
+Line       :     schema.add_field("sparse", DataType.SPARSE_FLOAT_VECTOR)
+
+
+
+PS D:\law-rag-project> Write-Host "`n===== Source metadata usage ====="
+
+===== Source metadata usage =====
+PS D:\law-rag-project> $MetadataMatches = @(
+    Get-ChildItem `
+        -Path ".\law-rag-kb\app" `
+        -Recurse `
+        -File `
+        -Filter "*.py" |
+    Select-String -Pattern `
+        'content_type.*meta|meta.*content_type|"content_type"|''content_type'''
+)
+PS D:\law-rag-project> Write-Host "MetadataUsageMatchCount:" $MetadataMatches.Count
+MetadataUsageMatchCount: 4
+PS D:\law-rag-project> $MetadataMatches |
+    Select-Object -First 80 Path, LineNumber, Line |
+    Format-List
+
+
+Path       : D:\law-rag-project\law-rag-kb\app\ingest\parser.py
+LineNumber : 203
+Line       :             content_type = str(getattr(part, "content_type", "image/png"))
+
+Path       : D:\law-rag-project\law-rag-kb\app\ingest\service.py
+LineNumber : 851
+Line       :                     "content_type": item.content_type,
+
+Path       : D:\law-rag-project\law-rag-kb\app\rag\prompt.py
+LineNumber : 56
+Line       :             "content_type": h.content_type,
+
+Path       : D:\law-rag-project\law-rag-kb\app\rag\retrieve.py
+LineNumber : 115
+Line       :             content_type=(h.meta or {}).get("content_type") or "text",
+
+
+
+PS D:\law-rag-project> Write-Host "`n===== Corrected runtime schema audit ====="
+
+===== Corrected runtime schema audit =====
+PS D:\law-rag-project> $CorrectedAudit = @'
+import json
+
+from pymilvus import Collection, connections
+from app.core.config import settings
+
+alias = "schema_diagnosis"
+failed = False
+
+try:
+    connections.connect(
+        alias=alias,
+        host=str(settings.milvus_host),
+        port=str(settings.milvus_port),
+    )
+
+    collection = Collection(
+        str(settings.milvus_collection),
+        using=alias,
+    )
+
+    actual_fields = {
+        field.name
+        for field in collection.schema.fields
+    }
+
+    expected_physical_fields = {
+        "doc_id",
+        "chunk_text",
+        "dense",
+        "sparse",
+        "meta",
+    }
+
+    missing_fields = sorted(
+        expected_physical_fields - actual_fields
+    )
+
+    print(
+        "ACTUAL_FIELDS="
+        + ",".join(sorted(actual_fields))
+    )
+    print(
+        "EXPECTED_PHYSICAL_FIELDS="
+        + ",".join(sorted(expected_physical_fields))
+    )
+    print(
+        f"MISSING_PHYSICAL_FIELD_COUNT={len(missing_fields)}"
+    )
+
+    for field_name in missing_fields:
+        print(f"MISSING_PHYSICAL_FIELD={field_name}")
+
+    indexed_fields = {
+        index.field_name
+        for index in collection.indexes
+    }
+
+    dense_index = "dense" in indexed_fields
+    sparse_index = "sparse" in indexed_fields
+
+    print(
+        "DENSE_INDEX_EXISTS="
+        + ("YES" if dense_index else "NO")
+    )
+    print(
+        "SPARSE_INDEX_EXISTS="
+        + ("YES" if sparse_index else "NO")
+    )
+
+    rows = collection.query(
+        expr="",
+        output_fields=["meta"],
+        limit=10,
+    )
+
+    metadata_keys = set()
+    valid_metadata_count = 0
+    content_type_present_count = 0
+
+    for row in rows:
+        metadata = row.get("meta")
+
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = None
+
+        if isinstance(metadata, dict):
+            valid_metadata_count += 1
+            metadata_keys.update(
+                str(key) for key in metadata.keys()
+            )
+
+            if "content_type" in metadata:
+                content_type_present_count += 1
+
+    print(f"METADATA_SAMPLE_COUNT={len(rows)}")
+    print(
+        f"VALID_METADATA_COUNT={valid_metadata_count}"
+    )
+    print(
+        "METADATA_KEYS="
+        + ",".join(sorted(metadata_keys))
+    )
+    print(
+        "CONTENT_TYPE_PRESENT_COUNT="
+        + str(content_type_present_count)
+    )
+
+    failed = (
+        bool(missing_fields)
+        or not dense_index
+        or not sparse_index
+        or not rows
+        or valid_metadata_count == 0
+        or content_type_present_count == 0
+    )
+
+    print(
+        "CORRECTED_SCHEMA_AUDIT="
+        + ("FAIL" if failed else "PASS")
+    )
+
+    raise SystemExit(1 if failed else 0)
+
+except SystemExit:
+    raise
+
+except Exception as exc:
+    print("CORRECTED_SCHEMA_AUDIT=FAIL")
+    print(f"ERROR_TYPE={type(exc).__name__}")
+    raise SystemExit(1)
+
+finally:
+    try:
+        connections.disconnect(alias)
+    except Exception:
+        pass
+'@
+PS D:\law-rag-project> $CorrectedAudit |
+    docker exec -i law-rag-kb python -
+
+PS D:\law-rag-project> $CorrectedAuditExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== Exit code ====="
+
+===== Exit code =====
+PS D:\law-rag-project> Write-Host "CorrectedAuditExitCode:" $CorrectedAuditExitCode
+CorrectedAuditExitCode: 0
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715135958
+**********************

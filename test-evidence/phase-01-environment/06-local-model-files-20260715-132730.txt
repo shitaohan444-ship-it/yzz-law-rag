@@ -1,0 +1,290 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715132730
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 13984
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-01-environment\06-local-model-files-20260715-132730.txt
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Local model file audit ====="
+
+===== Local model file audit =====
+PS D:\law-rag-project\law-rag-kb> @'
+import hashlib
+import json
+import os
+from pathlib import Path
+
+from app.core.config import settings
+
+
+def resolve_model_path(reference: str):
+    direct = Path(reference).expanduser()
+
+    if direct.exists():
+        return direct.resolve(), "DIRECT_PATH"
+
+    hf_home = os.environ.get("HF_HOME")
+    hf_cache = os.environ.get("HF_HUB_CACHE")
+
+    if hf_cache:
+        cache_root = Path(hf_cache)
+    elif hf_home:
+        cache_root = Path(hf_home) / "hub"
+    else:
+        cache_root = Path.home() / ".cache" / "huggingface" / "hub"
+
+    repo_directory = (
+        "models--" + reference.replace("/", "--")
+    )
+
+    repo_root = cache_root / repo_directory
+    snapshots_root = repo_root / "snapshots"
+
+    if not snapshots_root.exists():
+        return None, "NOT_FOUND"
+
+    main_ref = repo_root / "refs" / "main"
+
+    if main_ref.exists():
+        commit = main_ref.read_text(encoding="utf-8").strip()
+        snapshot = snapshots_root / commit
+
+        if snapshot.exists():
+            return snapshot.resolve(), "HF_CACHE_MAIN"
+
+    snapshots = sorted(
+        (path for path in snapshots_root.iterdir() if path.is_dir()),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+
+    if snapshots:
+        return snapshots[0].resolve(), "HF_CACHE_LATEST"
+
+    return None, "NOT_FOUND"
+
+
+def sha256_file(path: Path):
+    digest = hashlib.sha256()
+
+    with path.open("rb") as file:
+        for block in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(block)
+
+    return digest.hexdigest()
+
+
+models = [
+    ("EMBEDDING", settings.embedding_model),
+    ("RERANKER", settings.reranker_model),
+]
+
+overall_failures = 0
+
+offline_value = os.environ.get("HF_HUB_OFFLINE", "")
+transformers_offline = os.environ.get("TRANSFORMERS_OFFLINE", "")
+
+print(
+    "HF_HUB_OFFLINE_SET="
+    + ("YES" if offline_value else "NO")
+)
+print(
+    "TRANSFORMERS_OFFLINE_SET="
+    + ("YES" if transformers_offline else "NO")
+)
+print(f"MODEL_COUNT={len(models)}")
+
+for role, reference in models:
+    print(f"\n--- {role} ---")
+    print(f"REFERENCE={reference}")
+
+    model_path, source = resolve_model_path(str(reference))
+
+    print(f"RESOLUTION_SOURCE={source}")
+
+    if model_path is None:
+        print("MODEL_DIRECTORY=NOT_FOUND")
+        print("MODEL_RESULT=FAIL")
+        overall_failures += 1
+        continue
+
+    print(f"MODEL_DIRECTORY={model_path}")
+
+    files = [
+        path for path in model_path.rglob("*")
+        if path.is_file()
+    ]
+
+    total_bytes = sum(path.stat().st_size for path in files)
+    file_names = {path.name.lower() for path in files}
+
+    config_path = model_path / "config.json"
+    config_ok = False
+    config_hash = "N/A"
+
+    if config_path.exists() and config_path.stat().st_size > 0:
+        try:
+            with config_path.open("r", encoding="utf-8") as file:
+                json.load(file)
+            config_ok = True
+            config_hash = sha256_file(config_path)
+        except Exception:
+            config_ok = False
+
+    tokenizer_candidates = {
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "sentencepiece.bpe.model",
+        "sentencepiece.model",
+        "vocab.txt",
+        "vocab.json",
+    }
+
+    tokenizer_ok = any(
+        name in file_names
+        for name in tokenizer_candidates
+    )
+
+    weight_files = [
+        path for path in files
+        if path.suffix.lower() in {
+            ".safetensors",
+            ".bin",
+            ".pt",
+        }
+        and path.stat().st_size > 0
+    ]
+
+    incomplete_files = [
+        path for path in files
+        if path.name.lower().endswith(".incomplete")
+    ]
+
+    zero_byte_files = [
+        path for path in files
+        if path.stat().st_size == 0
+    ]
+
+    sparse_weight_ok = True
+
+    if role == "EMBEDDING":
+        sparse_weight_ok = any(
+            path.name.lower() == "sparse_linear.pt"
+            and path.stat().st_size > 0
+            for path in files
+        )
+
+    print(f"FILE_COUNT={len(files)}")
+    print(f"TOTAL_BYTES={total_bytes}")
+    print(f"TOTAL_GIB={total_bytes / (1024 ** 3):.3f}")
+    print(f"CONFIG_JSON={'PASS' if config_ok else 'FAIL'}")
+    print(f"CONFIG_SHA256={config_hash}")
+    print(f"TOKENIZER_FILES={'PASS' if tokenizer_ok else 'FAIL'}")
+    print(f"WEIGHT_FILE_COUNT={len(weight_files)}")
+    print(
+        "MODEL_WEIGHTS="
+        + ("PASS" if weight_files else "FAIL")
+    )
+
+    if role == "EMBEDDING":
+        print(
+            "SPARSE_WEIGHT="
+            + ("PASS" if sparse_weight_ok else "FAIL")
+        )
+
+    print(f"INCOMPLETE_FILE_COUNT={len(incomplete_files)}")
+    print(f"ZERO_BYTE_FILE_COUNT={len(zero_byte_files)}")
+
+    model_passed = (
+        bool(files)
+        and total_bytes > 0
+        and config_ok
+        and tokenizer_ok
+        and bool(weight_files)
+        and not incomplete_files
+        and sparse_weight_ok
+    )
+
+    print(
+        "MODEL_RESULT="
+        + ("PASS" if model_passed else "FAIL")
+    )
+
+    if not model_passed:
+        overall_failures += 1
+
+print("\n===== SUMMARY =====")
+print(f"MODEL_FAILURES={overall_failures}")
+print(
+    "AUDIT_RESULT="
+    + ("PASS" if overall_failures == 0 else "FAIL")
+)
+
+raise SystemExit(1 if overall_failures else 0)
+'@ | & $Python - 2>&1 |
+    Tee-Object -FilePath $AuditFile
+HF_HUB_OFFLINE_SET=NO
+TRANSFORMERS_OFFLINE_SET=NO
+MODEL_COUNT=2
+
+--- EMBEDDING ---
+REFERENCE=C:/Users/17962/.cache/modelscope/models/BAAI--bge-m3/snapshots/master
+RESOLUTION_SOURCE=DIRECT_PATH
+MODEL_DIRECTORY=C:\Users\17962\.cache\modelscope\models\BAAI--bge-m3\snapshots\master
+FILE_COUNT=17
+TOTAL_BYTES=2315474101
+TOTAL_GIB=2.156
+CONFIG_JSON=PASS
+CONFIG_SHA256=26159e7ad065073448460117eb24b7a4572f6f4e78eadff65dc0a11c052449fa
+TOKENIZER_FILES=PASS
+WEIGHT_FILE_COUNT=2
+MODEL_WEIGHTS=PASS
+SPARSE_WEIGHT=PASS
+INCOMPLETE_FILE_COUNT=0
+ZERO_BYTE_FILE_COUNT=0
+MODEL_RESULT=PASS
+
+--- RERANKER ---
+REFERENCE=C:/Users/17962/.cache/modelscope/models/BAAI--bge-reranker-v2-m3/snapshots/master
+RESOLUTION_SOURCE=DIRECT_PATH
+MODEL_DIRECTORY=C:\Users\17962\.cache\modelscope\models\BAAI--bge-reranker-v2-m3\snapshots\master
+FILE_COUNT=14
+TOTAL_BYTES=2293567620
+TOTAL_GIB=2.136
+CONFIG_JSON=PASS
+CONFIG_SHA256=13dcd6c31d9fec9d1d8e158702072f62d7fa7d312a64b9fe057bec9a08cfe41a
+TOKENIZER_FILES=PASS
+WEIGHT_FILE_COUNT=1
+MODEL_WEIGHTS=PASS
+INCOMPLETE_FILE_COUNT=0
+ZERO_BYTE_FILE_COUNT=0
+MODEL_RESULT=PASS
+
+===== SUMMARY =====
+MODEL_FAILURES=0
+AUDIT_RESULT=PASS
+PS D:\law-rag-project\law-rag-kb> $ModelAuditExitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Exit code ====="
+
+===== Exit code =====
+PS D:\law-rag-project\law-rag-kb> Write-Host "ModelAuditExitCode:" $ModelAuditExitCode
+ModelAuditExitCode: 0
+PS D:\law-rag-project\law-rag-kb> Write-Host "AuditFile:" $AuditFile
+AuditFile: D:\law-rag-project\test-evidence\phase-01-environment\06-local-model-files-audit-20260715-132730.txt
+PS D:\law-rag-project\law-rag-kb> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715132731
+**********************

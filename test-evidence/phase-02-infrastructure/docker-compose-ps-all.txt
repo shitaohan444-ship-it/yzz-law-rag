@@ -1,0 +1,7 @@
+﻿NAME                 IMAGE                                      COMMAND                  SERVICE      CREATED          STATUS                    PORTS
+law-rag-db-migrate   law-rag-project-db-migrate                 "alembic upgrade head"   db-migrate   6 hours ago      Exited (0) 6 hours ago    
+law-rag-kb           law-rag-project-rag-api                    "uvicorn app.main:ap…"   rag-api      19 minutes ago   Up 18 minutes (healthy)   127.0.0.1:8000->8000/tcp
+law-rag-minio        minio/minio:RELEASE.2024-12-18T13-15-44Z   "/usr/bin/docker-ent…"   minio        3 days ago       Up 6 hours (healthy)      0.0.0.0:9000-9001->9000-9001/tcp, [::]:9000-9001->9000-9001/tcp
+law-rag-postgres     postgres:16                                "docker-entrypoint.s…"   postgres     3 days ago       Up 6 hours (healthy)      0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+milvus-etcd          quay.io/coreos/etcd:v3.5.25                "etcd -advertise-cli…"   etcd         3 days ago       Up 6 hours (healthy)      2379-2380/tcp
+milvus-standalone    milvusdb/milvus:v2.6.19                    "/tini -- milvus run…"   standalone   3 days ago       Up 6 hours (healthy)      0.0.0.0:9091->9091/tcp, [::]:9091->9091/tcp, 0.0.0.0:19530->19530/tcp, [::]:19530->19530/tcp

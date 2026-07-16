@@ -1,0 +1,208 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715135828
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 25488
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-02-infrastructure\05-milvus-readonly-20260715-135827.txt
+PS D:\law-rag-project> Write-Host "`n===== Milvus HTTP health endpoint ====="
+
+===== Milvus HTTP health endpoint =====
+PS D:\law-rag-project> $MilvusHttpStatus = 0
+PS D:\law-rag-project> try {
+    $MilvusResponse = Invoke-WebRequest `
+        -Uri "http://127.0.0.1:9091/healthz" `
+        -Method Get `
+        -UseBasicParsing `
+        -TimeoutSec 10
+
+    $MilvusHttpStatus = $MilvusResponse.StatusCode
+    Write-Host "MilvusHealthStatusCode:" $MilvusHttpStatus
+    Write-Host "MilvusHealthBody:" $MilvusResponse.Content.Trim()
+}
+catch {
+    Write-Host "MilvusHealthStatusCode: REQUEST_FAILED"
+    Write-Host "MilvusHealthErrorType:" $_.Exception.GetType().Name
+}
+MilvusHealthStatusCode: 200
+MilvusHealthBody: OK
+PS D:\law-rag-project> Write-Host "`n===== Authenticated Milvus read-only audit ====="
+
+===== Authenticated Milvus read-only audit =====
+PS D:\law-rag-project> $MilvusAudit = @'
+from pymilvus import Collection, connections, utility
+
+from app.core.config import settings
+
+alias = "readonly_audit"
+failed = False
+
+try:
+    connections.connect(
+        alias=alias,
+        host=str(settings.milvus_host),
+        port=str(settings.milvus_port),
+    )
+
+    print("MILVUS_CONNECTION=PASS")
+
+    server_version = utility.get_server_version(using=alias)
+    collection_names = utility.list_collections(using=alias)
+    target = str(settings.milvus_collection)
+    target_exists = utility.has_collection(target, using=alias)
+
+    print(f"MILVUS_SERVER_VERSION={server_version}")
+    print(f"COLLECTION_COUNT={len(collection_names)}")
+    print(f"TARGET_COLLECTION_CONFIGURED={'YES' if target else 'NO'}")
+    print(f"TARGET_COLLECTION_EXISTS={'YES' if target_exists else 'NO'}")
+
+    if not target_exists:
+        print("MILVUS_AUDIT_RESULT=FAIL")
+        raise SystemExit(1)
+
+    collection = Collection(target, using=alias)
+
+    print(f"TARGET_NUM_ENTITIES={collection.num_entities}")
+
+    field_names = set()
+    primary_field = None
+
+    print("\n===== Collection schema =====")
+
+    for field in collection.schema.fields:
+        field_names.add(field.name)
+
+        if getattr(field, "is_primary", False):
+            primary_field = field
+
+        params = getattr(field, "params", {}) or {}
+        dimension = params.get("dim", "N/A")
+
+        print(
+            f"FIELD name={field.name} "
+            f"type={field.dtype} "
+            f"primary={getattr(field, 'is_primary', False)} "
+            f"dim={dimension}"
+        )
+
+    required_fields = {
+        "doc_id",
+        "chunk_text",
+        "dense_vector",
+        "sparse_vector",
+        "content_type",
+    }
+
+    missing_fields = sorted(required_fields - field_names)
+
+    print(f"REQUIRED_FIELD_COUNT={len(required_fields)}")
+    print(f"MISSING_REQUIRED_FIELD_COUNT={len(missing_fields)}")
+
+    for field_name in missing_fields:
+        print(f"MISSING_FIELD={field_name}")
+
+    if missing_fields:
+        failed = True
+
+    print("\n===== Collection indexes =====")
+
+    indexed_fields = set()
+
+    for index in collection.indexes:
+        indexed_fields.add(index.field_name)
+        params = index.params or {}
+
+        print(
+            f"INDEX field={index.field_name} "
+            f"name={index.index_name} "
+            f"type={params.get('index_type', 'N/A')} "
+            f"metric={params.get('metric_type', 'N/A')}"
+        )
+
+    dense_index_exists = "dense_vector" in indexed_fields
+    sparse_index_exists = "sparse_vector" in indexed_fields
+
+    print(
+        "DENSE_INDEX_EXISTS="
+        + ("YES" if dense_index_exists else "NO")
+    )
+    print(
+        "SPARSE_INDEX_EXISTS="
+        + ("YES" if sparse_index_exists else "NO")
+    )
+
+    if not dense_index_exists or not sparse_index_exists:
+        failed = True
+
+    load_state = utility.load_state(target, using=alias)
+    print(f"COLLECTION_LOAD_STATE={load_state}")
+
+    if primary_field is None:
+        print("PRIMARY_FIELD_EXISTS=NO")
+        failed = True
+    else:
+        print("PRIMARY_FIELD_EXISTS=YES")
+
+        rows = collection.query(
+            expr="",
+            output_fields=[primary_field.name],
+            limit=1,
+        )
+
+        print("READ_QUERY=PASS")
+        print(f"READ_QUERY_ROW_COUNT={len(rows)}")
+
+    print(
+        "MILVUS_AUDIT_RESULT="
+        + ("FAIL" if failed else "PASS")
+    )
+
+    raise SystemExit(1 if failed else 0)
+
+except SystemExit:
+    raise
+
+except Exception as exc:
+    print("MILVUS_AUDIT_RESULT=FAIL")
+    print(f"ERROR_TYPE={type(exc).__name__}")
+
+    error_code = getattr(exc, "code", None)
+    if error_code is not None:
+        print(f"ERROR_CODE={error_code}")
+
+    raise SystemExit(1)
+
+finally:
+    try:
+        connections.disconnect(alias)
+    except Exception:
+        pass
+'@
+PS D:\law-rag-project> $MilvusAudit |
+    docker exec -i law-rag-kb python -
+
+PS D:\law-rag-project> $MilvusAuditExitCode = $LASTEXITCODE
+PS D:\law-rag-project> Write-Host "`n===== Exit code summary ====="
+
+===== Exit code summary =====
+PS D:\law-rag-project> Write-Host "MilvusHttpStatus:" $MilvusHttpStatus
+MilvusHttpStatus: 200
+PS D:\law-rag-project> Write-Host "MilvusAuditExitCode:" $MilvusAuditExitCode
+MilvusAuditExitCode: 1
+PS D:\law-rag-project> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715135830
+**********************

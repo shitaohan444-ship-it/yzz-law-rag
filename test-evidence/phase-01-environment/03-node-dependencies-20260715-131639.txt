@@ -1,0 +1,177 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715131640
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 40204
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-01-environment\03-node-dependencies-20260715-131639.txt
+PS D:\law-rag-project\law-rag-api> Write-Host "`n===== Node 项目关键文件 ====="
+
+===== Node 项目关键文件 =====
+PS D:\law-rag-project\law-rag-api> Write-Host "CurrentDirectory:" (Get-Location)
+CurrentDirectory: D:\law-rag-project\law-rag-api
+PS D:\law-rag-project\law-rag-api> Write-Host "PackageJsonExists:" (Test-Path ".\package.json")
+PackageJsonExists: True
+PS D:\law-rag-project\law-rag-api> Write-Host "LockFileExists:" (Test-Path ".\pnpm-lock.yaml")
+LockFileExists: True
+PS D:\law-rag-project\law-rag-api> Write-Host "NodeModulesExists:" (Test-Path ".\node_modules")
+NodeModulesExists: True
+PS D:\law-rag-project\law-rag-api> Write-Host "NvmrcExists:" (Test-Path ".\.nvmrc")
+NvmrcExists: True
+PS D:\law-rag-project\law-rag-api> Get-FileHash ".\package.json", ".\pnpm-lock.yaml" -Algorithm SHA256 |
+    Select-Object Path, Algorithm, Hash
+
+Path                                          Algorithm Hash
+----                                          --------- ----
+D:\law-rag-project\law-rag-api\package.json   SHA256    521C6A95F244DB7241B742A6E0FA7B5901F5F04B169D65CD7791C43FB23B...
+D:\law-rag-project\law-rag-api\pnpm-lock.yaml SHA256    5344D3695C373AABAFBDE87935104FDE400C11922974C9C0BF161C0DF3E0...
+
+
+PS D:\law-rag-project\law-rag-api> Write-Host "`n===== 项目声明的运行时约束 ====="
+
+===== 项目声明的运行时约束 =====
+PS D:\law-rag-project\law-rag-api> $PackageJson = Get-Content ".\package.json" -Raw | ConvertFrom-Json
+PS D:\law-rag-project\law-rag-api> [PSCustomObject]@{
+    Name           = $PackageJson.name
+    Version        = $PackageJson.version
+    PackageManager = $PackageJson.packageManager
+    NodeEngine     = $PackageJson.engines.node
+    PnpmEngine     = $PackageJson.engines.pnpm
+} | Format-List
+
+
+Name           : law-rag-api
+Version        : 0.0.1
+PackageManager :
+NodeEngine     : >=22.0.0 <23
+PnpmEngine     : >=10.0.0 <11
+
+
+
+PS D:\law-rag-project\law-rag-api> if (Test-Path ".\.nvmrc") {
+    Write-Host ".nvmrc:" (Get-Content ".\.nvmrc" -Raw).Trim()
+}
+.nvmrc: 22.22.3
+PS D:\law-rag-project\law-rag-api> Write-Host "ActualNode:" (node --version)
+ActualNode: v22.22.3
+PS D:\law-rag-project\law-rag-api> Write-Host "ActualPnpm:" (pnpm --version)
+ActualPnpm: 10.32.0
+PS D:\law-rag-project\law-rag-api> Write-Host "`n===== 直接依赖树检查 ====="
+
+===== 直接依赖树检查 =====
+PS D:\law-rag-project\law-rag-api> pnpm list --depth 0 --json |
+    Set-Content -Path $InventoryFile -Encoding UTF8
+PS D:\law-rag-project\law-rag-api> $PnpmListExitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-api> $DependencyTree = @(Get-Content $InventoryFile -Raw | ConvertFrom-Json)
+PS D:\law-rag-project\law-rag-api> $ProjectTree = $DependencyTree[0]
+PS D:\law-rag-project\law-rag-api> $DependencyRows = @()
+PS D:\law-rag-project\law-rag-api> foreach ($SectionName in @("dependencies", "devDependencies", "optionalDependencies")) {
+    $Section = $ProjectTree.$SectionName
+
+    if ($null -ne $Section) {
+        foreach ($Property in $Section.PSObject.Properties) {
+            $DependencyRows += [PSCustomObject]@{
+                Type    = $SectionName
+                Name    = $Property.Name
+                Version = $Property.Value.version
+            }
+        }
+    }
+}
+PS D:\law-rag-project\law-rag-api> $DependencyRows |
+    Sort-Object Type, Name |
+    Format-Table Type, Name, Version -AutoSize
+
+Type            Name                     Version
+----            ----                     -------
+dependencies    @nestjs/common           11.1.28
+dependencies    @nestjs/config           4.0.4
+dependencies    @nestjs/core             11.1.28
+dependencies    @nestjs/mapped-types     2.1.1
+dependencies    @nestjs/platform-express 11.1.28
+dependencies    @prisma/client           6.19.3
+dependencies    class-transformer        0.5.1
+dependencies    class-validator          0.15.1
+dependencies    joi                      18.2.3
+dependencies    minio                    8.0.7
+dependencies    reflect-metadata         0.2.2
+dependencies    rxjs                     7.8.2
+devDependencies @eslint/eslintrc         3.3.6
+devDependencies @eslint/js               9.39.5
+devDependencies @nestjs/cli              11.0.24
+devDependencies @nestjs/schematics       11.1.0
+devDependencies @nestjs/testing          11.1.28
+devDependencies @types/express           5.0.6
+devDependencies @types/jest              30.0.0
+devDependencies @types/multer            2.2.0
+devDependencies @types/node              22.20.1
+devDependencies @types/supertest         7.2.0
+devDependencies eslint                   9.39.5
+devDependencies eslint-config-prettier   10.1.8
+devDependencies eslint-plugin-prettier   5.5.6
+devDependencies globals                  17.7.0
+devDependencies jest                     30.4.2
+devDependencies prettier                 3.9.5
+devDependencies prisma                   6.19.3
+devDependencies source-map-support       0.5.21
+devDependencies supertest                7.2.2
+devDependencies tsconfig-paths           4.2.0
+devDependencies ts-jest                  29.4.11
+devDependencies ts-loader                9.6.2
+devDependencies ts-node                  10.9.2
+devDependencies tsx                      4.23.0
+devDependencies typescript               5.9.3
+devDependencies typescript-eslint        8.63.0
+
+
+PS D:\law-rag-project\law-rag-api> Write-Host "DirectDependencyCount:" $DependencyRows.Count
+DirectDependencyCount: 38
+PS D:\law-rag-project\law-rag-api> Write-Host "PnpmListExitCode:" $PnpmListExitCode
+PnpmListExitCode: 0
+PS D:\law-rag-project\law-rag-api> Write-Host "`n===== 构建与测试工具可执行性 ====="
+
+===== 构建与测试工具可执行性 =====
+PS D:\law-rag-project\law-rag-api> pnpm exec tsc --version
+
+PS D:\law-rag-project\law-rag-api> $TscExitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-api> pnpm exec eslint --version
+
+PS D:\law-rag-project\law-rag-api> $EslintExitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-api> pnpm exec jest --version
+
+PS D:\law-rag-project\law-rag-api> $JestExitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-api> pnpm exec nest --version
+
+PS D:\law-rag-project\law-rag-api> $NestExitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-api> Write-Host "`n===== 退出码汇总 ====="
+
+===== 退出码汇总 =====
+PS D:\law-rag-project\law-rag-api> Write-Host "PnpmListExitCode:" $PnpmListExitCode
+PnpmListExitCode: 0
+PS D:\law-rag-project\law-rag-api> Write-Host "TscExitCode:" $TscExitCode
+TscExitCode: 0
+PS D:\law-rag-project\law-rag-api> Write-Host "EslintExitCode:" $EslintExitCode
+EslintExitCode: 0
+PS D:\law-rag-project\law-rag-api> Write-Host "JestExitCode:" $JestExitCode
+JestExitCode: 0
+PS D:\law-rag-project\law-rag-api> Write-Host "NestExitCode:" $NestExitCode
+NestExitCode: 0
+PS D:\law-rag-project\law-rag-api> Write-Host "InventoryFile:" $InventoryFile
+InventoryFile: D:\law-rag-project\test-evidence\phase-01-environment\03-node-dependency-tree-20260715-131639.json
+PS D:\law-rag-project\law-rag-api> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715131644
+**********************

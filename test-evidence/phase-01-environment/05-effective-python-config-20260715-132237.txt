@@ -1,0 +1,280 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260715132238
+Username: HANSHITAO\17962
+RunAs User: HANSHITAO\17962
+Configuration Name: 
+Machine: HANSHITAO (Microsoft Windows NT 10.0.22631.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 19936
+PSVersion: 5.1.22621.4391
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.22621.4391
+BuildVersion: 10.0.22621.4391
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is D:\law-rag-project\test-evidence\phase-01-environment\05-effective-python-config-20260715-132237.txt
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== Python 有效配置安全审计 ====="
+
+===== Python 有效配置安全审计 =====
+PS D:\law-rag-project\law-rag-kb> @'
+import os
+import sys
+from pathlib import Path
+
+
+def read_dotenv(path: Path) -> dict[str, str]:
+    result = {}
+
+    if not path.exists():
+        return result
+
+    for raw in path.read_text(encoding="utf-8-sig").splitlines():
+        line = raw.strip()
+
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith("export "):
+            line = line[7:].strip()
+
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+
+        if key:
+            result[key] = value.strip()
+
+    return result
+
+
+def raw_value(value):
+    if hasattr(value, "get_secret_value"):
+        return value.get_secret_value()
+    return value
+
+
+def is_present(value) -> bool:
+    value = raw_value(value)
+
+    if value is None:
+        return False
+
+    if isinstance(value, str):
+        return bool(value.strip())
+
+    return True
+
+
+env_values = read_dotenv(Path(".env"))
+example_values = read_dotenv(Path(".env.example"))
+
+missing_keys = sorted(
+    key for key in example_values
+    if key not in env_values and not os.environ.get(key)
+)
+
+try:
+    import app.core.config as config
+
+    if hasattr(config, "settings"):
+        settings = config.settings
+        loader = "config.settings"
+    elif hasattr(config, "get_settings"):
+        settings = config.get_settings()
+        loader = "config.get_settings()"
+    elif hasattr(config, "Settings"):
+        settings = config.Settings()
+        loader = "config.Settings()"
+    else:
+        print("CONFIG_IMPORT=FAIL")
+        print("REASON=no_settings_object")
+        raise SystemExit(1)
+
+except Exception as exc:
+    print("CONFIG_IMPORT=FAIL")
+    print(f"EXCEPTION_TYPE={type(exc).__name__}")
+    raise SystemExit(1)
+
+print("CONFIG_IMPORT=PASS")
+print(f"SETTINGS_LOADER={loader}")
+print(f"MISSING_FROM_ENV_COUNT={len(missing_keys)}")
+
+fields = getattr(type(settings), "model_fields", {})
+field_lookup = {}
+
+for field_name, field_info in fields.items():
+    field_lookup[field_name.upper()] = (field_name, field_info)
+
+    for alias in (
+        getattr(field_info, "alias", None),
+        getattr(field_info, "validation_alias", None),
+    ):
+        if isinstance(alias, str):
+            field_lookup[alias.upper()] = (field_name, field_info)
+
+required_empty = []
+unmapped = []
+
+print("\n===== .env 中缺少字段的有效状态 =====")
+
+for env_key in missing_keys:
+    field_entry = field_lookup.get(env_key)
+
+    if field_entry is None:
+        candidate = env_key.lower()
+
+        if hasattr(settings, candidate):
+            field_name = candidate
+            field_info = fields.get(candidate)
+        else:
+            print(
+                f"{env_key}: effective=UNMAPPED "
+                f"source=UNKNOWN required=UNKNOWN"
+            )
+            unmapped.append(env_key)
+            continue
+    else:
+        field_name, field_info = field_entry
+
+    value = getattr(settings, field_name, None)
+    state = "SET" if is_present(value) else "EMPTY"
+
+    required = False
+    if field_info is not None and hasattr(field_info, "is_required"):
+        required = field_info.is_required()
+
+    print(
+        f"{env_key}: effective={state} "
+        f"source=DEFAULT_OR_FALLBACK required={required}"
+    )
+
+    if required and state == "EMPTY":
+        required_empty.append(env_key)
+
+
+def setting_present(name: str) -> bool:
+    return hasattr(settings, name) and is_present(getattr(settings, name))
+
+
+checks = {
+    "POSTGRES_CONFIG": all(
+        setting_present(name)
+        for name in (
+            "postgres_host",
+            "postgres_port",
+            "postgres_db",
+            "postgres_user",
+            "postgres_password",
+        )
+    ),
+    "MINIO_CONFIG": all(
+        setting_present(name)
+        for name in (
+            "minio_endpoint",
+            "minio_port",
+            "minio_access_key",
+            "minio_secret_key",
+            "minio_bucket",
+        )
+    ),
+    "EMBEDDING_CONFIG": setting_present("embedding_model"),
+    "RERANKER_CONFIG": setting_present("reranker_model"),
+    "LLM_CONFIG": all(
+        setting_present(name)
+        for name in (
+            "llm_provider",
+            "llm_model",
+            "llm_api_key",
+        )
+    ),
+}
+
+vl_enabled = bool(getattr(settings, "vl_enabled", False))
+
+if vl_enabled:
+    vl_auth_available = (
+        setting_present("vl_api_key")
+        or setting_present("llm_api_key")
+    )
+
+    checks["VL_CONFIG"] = (
+        setting_present("vl_model")
+        and vl_auth_available
+    )
+else:
+    checks["VL_CONFIG"] = True
+
+print("\n===== 关键配置组检查 =====")
+
+for name, passed in checks.items():
+    print(f"{name}={'PASS' if passed else 'FAIL'}")
+
+print("\n===== 审计汇总 =====")
+print(f"REQUIRED_EMPTY_COUNT={len(required_empty)}")
+print(f"UNMAPPED_COUNT={len(unmapped)}")
+print(f"CRITICAL_GROUP_FAILURES={sum(not value for value in checks.values())}")
+
+blocking = bool(required_empty) or any(not value for value in checks.values())
+raise SystemExit(1 if blocking else 0)
+'@ | & $Python - 2>&1 |
+    Tee-Object -FilePath $AuditFile
+CONFIG_IMPORT=PASS
+SETTINGS_LOADER=config.settings
+MISSING_FROM_ENV_COUNT=23
+
+===== .env ?????????? =====
+DENSE_WEIGHT: effective=SET source=DEFAULT_OR_FALLBACK required=False
+HNSW_EF: effective=SET source=DEFAULT_OR_FALLBACK required=False
+HYBRID_RANKER: effective=SET source=DEFAULT_OR_FALLBACK required=False
+PDF_RENDER_SCALE: effective=SET source=DEFAULT_OR_FALLBACK required=False
+RERANK_BATCH_SIZE: effective=SET source=DEFAULT_OR_FALLBACK required=False
+RERANK_MIN_SCORE: effective=SET source=DEFAULT_OR_FALLBACK required=False
+RERANK_TOP_K: effective=SET source=DEFAULT_OR_FALLBACK required=False
+RRF_K: effective=SET source=DEFAULT_OR_FALLBACK required=False
+SCAN_PAGE_MIN_TEXT_CHARS: effective=SET source=DEFAULT_OR_FALLBACK required=False
+SEARCH_TIMING_ENABLED: effective=SET source=DEFAULT_OR_FALLBACK required=False
+SEARCH_TOP_K: effective=SET source=DEFAULT_OR_FALLBACK required=False
+SPARSE_WEIGHT: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_API_BASE: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_API_KEY: effective=EMPTY source=DEFAULT_OR_FALLBACK required=False
+VL_CONCURRENCY: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_ENABLED: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_FILTER_CONFIDENCE: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_MAX_OUTPUT_TOKENS: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_MAX_RETRIES: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_MODEL: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_NEARBY_TEXT_CHARS: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_PROMPT_VERSION: effective=SET source=DEFAULT_OR_FALLBACK required=False
+VL_TIMEOUT_SECONDS: effective=SET source=DEFAULT_OR_FALLBACK required=False
+
+===== ??????? =====
+POSTGRES_CONFIG=PASS
+MINIO_CONFIG=PASS
+EMBEDDING_CONFIG=PASS
+RERANKER_CONFIG=PASS
+LLM_CONFIG=PASS
+VL_CONFIG=PASS
+
+===== ???? =====
+REQUIRED_EMPTY_COUNT=0
+UNMAPPED_COUNT=0
+CRITICAL_GROUP_FAILURES=0
+PS D:\law-rag-project\law-rag-kb> $ConfigAuditExitCode = $LASTEXITCODE
+PS D:\law-rag-project\law-rag-kb> Write-Host "`n===== 退出码 ====="
+
+===== 退出码 =====
+PS D:\law-rag-project\law-rag-kb> Write-Host "ConfigAuditExitCode:" $ConfigAuditExitCode
+ConfigAuditExitCode: 0
+PS D:\law-rag-project\law-rag-kb> Write-Host "AuditFile:" $AuditFile
+AuditFile: D:\law-rag-project\test-evidence\phase-01-environment\05-effective-python-config-audit-20260715-132237.txt
+PS D:\law-rag-project\law-rag-kb> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260715132239
+**********************
