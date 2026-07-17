@@ -203,7 +203,6 @@ describe('KnowledgePanel', () => {
       const url = new URL(String(input), 'http://localhost');
       const requestedPage = Number(url.searchParams.get('page'));
       const pageSize = Number(url.searchParams.get('page_size'));
-      expect(pageSize).toBe(5);
       const offset = (requestedPage - 1) * pageSize;
       return jsonResponse({
         items: allDocuments.slice(offset, offset + pageSize),
@@ -218,6 +217,11 @@ describe('KnowledgePanel', () => {
     expect(screen.getAllByRole('article')).toHaveLength(5);
     expect(screen.getByText('第 1 / 3 页')).toBeVisible();
     expect(screen.getByRole('button', { name: '上一页' })).toBeDisabled();
+    const pageSizeSelect = screen.getByLabelText('已登记文档每页数量');
+    expect(pageSizeSelect).toHaveValue('5');
+    expect(screen.getAllByRole('option', { name: /份$/ }).map((option) => option.textContent)).toEqual([
+      '5 份', '10 份', '20 份', '50 份', '100 份', '500 份', '1000 份',
+    ]);
 
     fireEvent.click(screen.getByRole('button', { name: '下一页' }));
     expect(await screen.findByText('分页文档 6')).toBeVisible();
@@ -227,9 +231,20 @@ describe('KnowledgePanel', () => {
     expect(screen.getAllByRole('article')).toHaveLength(2);
     expect(screen.getByRole('button', { name: '下一页' })).toBeDisabled();
 
+    fireEvent.change(pageSizeSelect, { target: { value: '10' } });
+    expect(await screen.findByText('分页文档 1')).toBeVisible();
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(10));
+    expect(screen.getByText('第 1 / 2 页')).toBeVisible();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('page=1&page_size=10'))).toBe(true);
+
+    fireEvent.change(pageSizeSelect, { target: { value: '1000' } });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(12));
+    expect(screen.getByText('第 1 / 1 页')).toBeVisible();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('page=1&page_size=1000'))).toBe(true);
+
     fireEvent.change(screen.getByLabelText('按标题筛选'), { target: { value: '分页文档' } });
     fireEvent.click(screen.getByRole('button', { name: '筛选' }));
     expect(await screen.findByText('分页文档 1')).toBeVisible();
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('page=1&page_size=5'))).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('page=1&page_size=1000'))).toBe(true);
   });
 });

@@ -20,7 +20,7 @@ export class QueryKnowledgeDocumentsDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(1000)
   page_size = 20;
 
   @IsOptional()

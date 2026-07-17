@@ -729,6 +729,32 @@ textarea::placeholder {
   font-weight: 700;
 }
 
+.list-summary-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.list-summary-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #536660;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.list-summary-controls select {
+  min-height: 36px;
+  min-width: 92px;
+  border: 1px solid #cdd7d2;
+  border-radius: 7px;
+  background: #fff;
+  color: #31544c;
+  padding: 0 28px 0 10px;
+}
+
 .result-card {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr);
@@ -1187,6 +1213,16 @@ footer {
 
   .filter-bar input {
     grid-column: auto;
+  }
+
+  .document-section > .results-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .list-summary-controls {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .result-card {

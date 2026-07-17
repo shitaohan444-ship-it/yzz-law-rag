@@ -18,7 +18,8 @@ import type {
 } from './types';
 
 const MAX_BYTES = 50 * 1024 * 1024;
-const DOCUMENT_PAGE_SIZE = 5;
+const DEFAULT_DOCUMENT_PAGE_SIZE = 5;
+const documentPageSizeOptions = [5, 10, 20, 50, 100, 500, 1000] as const;
 const categories: KnowledgeCategory[] = ['法规', '案例', '工作资料'];
 
 const statusLabels: Record<string, string> = {
@@ -99,6 +100,7 @@ export default function KnowledgePanel() {
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [documentPageSize, setDocumentPageSize] = useState(DEFAULT_DOCUMENT_PAGE_SIZE);
   const [keyword, setKeyword] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -119,22 +121,22 @@ export default function KnowledgePanel() {
   const fileInput = useRef<HTMLInputElement>(null);
   const replaceFileInput = useRef<HTMLInputElement>(null);
 
-  async function loadDocuments(targetPage = page) {
+  async function loadDocuments(targetPage = page, targetPageSize = documentPageSize) {
     setLoadingList(true);
     setError('');
     try {
       let result = await listKnowledgeDocuments({
         page: targetPage,
-        pageSize: DOCUMENT_PAGE_SIZE,
+        pageSize: targetPageSize,
         keyword,
         category: categoryFilter,
         status: statusFilter,
       });
-      const lastPage = Math.max(1, Math.ceil(result.total / DOCUMENT_PAGE_SIZE));
+      const lastPage = Math.max(1, Math.ceil(result.total / targetPageSize));
       if (targetPage > lastPage) {
         result = await listKnowledgeDocuments({
           page: lastPage,
-          pageSize: DOCUMENT_PAGE_SIZE,
+          pageSize: targetPageSize,
           keyword,
           category: categoryFilter,
           status: statusFilter,
@@ -360,7 +362,7 @@ export default function KnowledgePanel() {
     }
   }
 
-  const pageCount = Math.max(1, Math.ceil(total / DOCUMENT_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / documentPageSize));
 
   return (
     <section id="knowledge-panel" role="tabpanel" aria-labelledby="knowledge-tab" className="panel">
@@ -440,7 +442,26 @@ export default function KnowledgePanel() {
       <div className="document-section">
         <div className="results-summary">
           <h3>已登记文档</h3>
-          <span>共 {total} 份</span>
+          <div className="list-summary-controls">
+            <span>共 {total} 份</span>
+            <label>
+              <span>每页显示</span>
+              <select
+                aria-label="已登记文档每页数量"
+                value={documentPageSize}
+                disabled={loadingList}
+                onChange={(event) => {
+                  const nextPageSize = Number(event.target.value);
+                  setDocumentPageSize(nextPageSize);
+                  void loadDocuments(1, nextPageSize);
+                }}
+              >
+                {documentPageSizeOptions.map((value) => (
+                  <option key={value} value={value}>{value} 份</option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
         <form
           className="filter-bar"

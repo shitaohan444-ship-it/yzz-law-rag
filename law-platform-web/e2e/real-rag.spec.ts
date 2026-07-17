@@ -135,6 +135,13 @@ test.describe('真实 RAG 验收', () => {
     await page.goto('/');
     await page.getByRole('tab', { name: /知识库管理/ }).click();
     await expect(page.locator('.document-card')).toHaveCount(5);
+    const largePageResponse = page.waitForResponse((response) =>
+      response.url().includes('/api/rag/documents?') &&
+      response.url().includes('page_size=1000'),
+    );
+    await page.getByLabel('已登记文档每页数量').selectOption('1000');
+    await expect((await largePageResponse).status()).toBe(200);
+    await expect(page.getByLabel('已登记文档每页数量')).toHaveValue('1000');
     await page.getByLabel('按标题筛选').fill('公共知识库多源追加真实验收');
     await page.getByRole('button', { name: '筛选' }).click();
     const row = page.locator('.document-card').filter({

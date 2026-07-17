@@ -71,13 +71,25 @@ law-platform-api/
 - PostgreSQL 16
 - MinIO
 
-数据库和 MinIO 由项目根 `docker-compose.yml` 启动。Node 平台当前不在根 Compose 中，需要单独启动。
+平台 API 已加入项目根 `docker-compose.yml`，与数据库、MinIO、Milvus、FastAPI 和前端一起启动。容器内监听 `0.0.0.0:3000`，宿主机仍只绑定 `127.0.0.1:3000`，不会直接暴露到局域网。
 
-## 安装与启动
+## Docker 一键启动（推荐）
 
 ```powershell
 cd D:\law-rag-project
-docker compose up -d
+docker compose up -d --build
+docker compose ps
+```
+
+容器使用 Docker 内部地址 `postgres:5432`、`minio:9000` 和 `rag-api:8000`。完成首次构建后，只要 Docker Desktop 开启“登录时启动”且没有手工停止容器，平台 API 会通过 `restart: unless-stopped` 自动恢复。
+
+## 本地开发启动（可选）
+
+需要 NestJS 热更新时，先停止平台 API 和前端容器以释放端口：
+
+```powershell
+cd D:\law-rag-project
+docker compose stop platform-web platform-api
 
 cd D:\law-rag-project\law-platform-api
 pnpm install
@@ -94,7 +106,7 @@ RAG_INGEST_TIMEOUT_MS=900000
 RAG_SERVICE_TOKEN=
 ```
 
-`HOST` 默认是 `127.0.0.1`，由同机 Vite 代理访问，不要为了局域网前端而改成 `0.0.0.0`。开发模式关闭 FastAPI 鉴权时，`RAG_SERVICE_TOKEN` 可以留空。启用 FastAPI 鉴权后，令牌只保存在平台后端 `.env` 中，禁止写入前端 `VITE_` 变量。当前局域网验收版没有登录功能，因此 FastAPI 应保持开发兼容模式；生产启用鉴权前必须先补齐平台用户身份注入。
+本地开发时 `HOST` 默认是 `127.0.0.1`，由同机 Vite 代理访问，不要为了局域网前端而改成 `0.0.0.0`；Docker 会在容器内部单独覆盖为 `0.0.0.0`。开发模式关闭 FastAPI 鉴权时，`RAG_SERVICE_TOKEN` 可以留空。启用 FastAPI 鉴权后，令牌只保存在平台后端或根 Compose 环境中，禁止写入前端 `VITE_` 变量。当前局域网验收版没有登录功能，因此 FastAPI 应保持开发兼容模式；生产启用鉴权前必须先补齐平台用户身份注入。
 
 其他启动命令：
 
@@ -115,7 +127,7 @@ pnpm run test -- --runInBand
 pnpm run test:e2e -- --runInBand
 ```
 
-RAG 网关测试额外覆盖请求白名单、内部令牌、参数校验、超时、断线、无效 JSON 和上游安全错误。2026-07-16 当前基线：单元测试 32/32、HTTP E2E 15/15，ESLint 与 build 通过；上传测试还覆盖文件签名、SHA-256 去重、事务登记、MinIO 补偿、上传 timing 持久化、来源追加提升及 Chunk 响应不含向量字段。
+RAG 网关测试额外覆盖请求白名单、内部令牌、参数校验、超时、断线、无效 JSON 和上游安全错误。2026-07-16 当前基线：单元测试 40/40、HTTP E2E 15/15，ESLint 与 build 通过；知识文档列表允许 `page_size` 1–1000，前端提供 5、10、20、50、100、500、1000 七档选择。上传测试还覆盖文件签名、SHA-256 去重、事务登记、MinIO 补偿、上传 timing 持久化、来源追加提升及 Chunk 响应不含向量字段。
 
 多源文件接口为 `GET/POST /api/rag/documents/{id}/sources` 和 `PUT /api/rag/documents/{id}/sources/{sourceId}/file`。追加或替换先使用隐藏 staging 附件/文档完成真实解析、Embedding 和 Milvus 写入，成功后才提升到原 `doc_id`；失败会清理 staging，其他来源及原 Chunk 继续可用。相同文件、跨文档重复文件和同一文档并发操作返回安全 `409`。`POST /api/rag/documents/{id}/ingest?force=true` 对全部有效来源执行原子重建。
 

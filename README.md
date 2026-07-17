@@ -134,7 +134,7 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
 
 ## 快速启动
 
-1. 首次构建并启动 PostgreSQL、MinIO、Milvus、数据库迁移和 RAG API：
+1. 首次构建并启动整套系统（PostgreSQL、MinIO、Milvus、数据库迁移、RAG API、平台 API 和前端）：
 
    ```powershell
    cd D:\law-rag-project
@@ -149,37 +149,22 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
    docker compose up -d
    docker compose stop
    docker compose ps
-   docker compose logs -f rag-api
+   docker compose logs -f platform-web platform-api rag-api
    ```
 
-3. 验证 RAG API：
+3. 验证后端和前端：
 
    ```powershell
    Invoke-RestMethod http://127.0.0.1:8000/ready
    Invoke-RestMethod http://127.0.0.1:8000/health
+   Invoke-WebRequest http://127.0.0.1:5173 -UseBasicParsing
    ```
 
-   `/ready` 只有在 PostgreSQL、MinIO、Milvus和两个本地模型目录全部可用时才返回 200；模型在第一次检索时按需加载。Docker 自动启动 API，但不会自动扫描或入库 pending 文档。
+   `/ready` 只有在 PostgreSQL、MinIO、Milvus和两个本地模型目录全部可用时才返回 200；模型在第一次检索时按需加载。Docker 不会自动扫描或入库 pending 文档。
 
-4. 另行启动一体化平台后端（NodeJS）：
+4. 本机使用 `http://127.0.0.1:5173`；同一局域网的电脑或手机使用 `http://服务器局域网IP:5173`。前端容器只把 `/api` 转发到 Docker 内部的 `platform-api:3000`，浏览器不会直连 FastAPI。局域网只需按需放行 Windows 防火墙 TCP 5173，不要开放 3000、8000、5432、6333 或 9000。
 
-   ```powershell
-   cd D:\law-rag-project\law-platform-api
-   pnpm install
-   pnpm run start:dev
-   ```
-
-5. 启动前端并在本机或局域网访问：
-
-   ```powershell
-   cd D:\law-rag-project\law-platform-web
-   pnpm install
-   pnpm run dev
-   ```
-
-   本机使用 `http://127.0.0.1:5173`；同一局域网的电脑或手机使用 `http://服务器局域网IP:5173`。Vite 只把 `/api` 代理到本机 `law-platform-api:3000`，浏览器不会直连 FastAPI。局域网测试只需按需放行 Windows 防火墙 TCP 5173，不要开放 3000、8000、5432、6333 或 9000。
-
-要在电脑重启后自动恢复容器，请开启 Docker Desktop 的“登录时启动”，并保持各长期服务的 `restart: unless-stopped`。`qwen3.7-plus` 和 `qwen3-vl-plus` 仍由容器通过百炼云端 API 调用，不是在 Docker 内运行的本地模型。
+完成一次 `docker compose up -d --build` 后，开启 Docker Desktop 的“登录时启动”，电脑重启并启动 Docker Desktop 时，所有长期服务会通过 `restart: unless-stopped` 自动恢复，无需再分别运行 `pnpm`。如果曾在 Docker Desktop 中手工停止容器，需要重新执行 `docker compose up -d`。`qwen3.7-plus` 和 `qwen3-vl-plus` 仍由容器通过百炼云端 API 调用，不是在 Docker 内运行的本地模型。
 
 ## 常用访问地址
 
@@ -205,9 +190,9 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
 
 2026-07-16 已完成公共知识库上传第一版及 Chunk/耗时增强：前端支持公开法规、案例和工作资料上传，Node 平台完成 50MB/格式校验、SHA-256 去重、MinIO 原件、数据库事务登记、自动入库、状态/Markdown/Chunk 查询、失败重试、强制重建和分阶段耗时持久化。平台单元 30/30、HTTP E2E 15/15、前端组件 7/7、模拟浏览器 6/6、Python 99 passed + 5 subtests；真实文档 `doc_id=30` 强制重建后仍为 10 个 Chunk，ID 为 `30:m:0000` 至 `30:m:0009`，原问题继续命中文档 30。详见 [公共知识库上传第一版实施报告](docs/公共知识库上传第一版实施报告_2026-07-16.md)。
 
-同日完成公共知识库多源文件追加：顶部上传区只新建独立知识库，入库成功的文档可通过“追加文件”把后续原件加入同一 `doc_id`；原 Chunk 保留，新旧来源共同参与检索与问答。“管理文件”可查看每个来源的 Markdown、Chunk、耗时并单独安全替换；“强制重建”会在所有来源处理成功后一次性替换整份向量数据。Alembic `d8e9f0a1b2c3` 新增 `oa.kb_document_source` 并回填历史主文件。当前基线为平台单元 32/32、HTTP E2E 15/15、前端组件 9/9、模拟浏览器 6/6、Python 102 passed + 5 subtests；真实文档 #38 在同一条目下保持 2 个来源、6 个 Chunk，主文件与追加/替换后的识别词均命中 #38，失败追加不影响旧数据，重建后活动 staging 文档、附件、来源、Milvus Chunk 和 MinIO 对象均为 0。
+同日完成公共知识库多源文件追加：顶部上传区只新建独立知识库，入库成功的文档可通过“追加文件”把后续原件加入同一 `doc_id`；原 Chunk 保留，新旧来源共同参与检索与问答。“管理文件”可查看每个来源的 Markdown、Chunk、耗时并单独安全替换；“强制重建”会在所有来源处理成功后一次性替换整份向量数据。Alembic `d8e9f0a1b2c3` 新增 `oa.kb_document_source` 并回填历史主文件。当前基线为平台单元 40/40、HTTP E2E 15/15、前端组件 14/14、模拟浏览器 6/6、Python 102 passed + 5 subtests；真实文档 #38 在同一条目下保持 2 个来源、6 个 Chunk，主文件与追加/替换后的识别词均命中 #38，失败追加不影响旧数据，重建后活动 staging 文档、附件、来源、Milvus Chunk 和 MinIO 对象均为 0。
 
-知识库管理页随后完成五条分页与独立预览：已登记文档固定每页 5 份；“查看 Markdown”和“查看 Chunk”使用新浏览器标签页打开可复制地址，主卡片默认合并全部来源，文件管理入口自动携带 `source_id`。Chunk 页继续保持每页 20 条，并把来源和页码写入 URL。当前前端组件测试更新为 14/14，桌面/手机模拟浏览器 6/6，真实文档 #38 新标签页验收 2/2；新页面仍只请求 `/api/rag/*`，不会直连 8000、9000 或 19530。
+知识库管理页随后完成可选分页与独立预览：已登记文档默认每页 5 份，可选择 5、10、20、50、100、500 或 1000 份，切换后自动回到第一页；“查看 Markdown”和“查看 Chunk”使用新浏览器标签页打开可复制地址。Chunk 页继续保持每页 20 条，并把来源和页码写入 URL。当前前端组件 14/14、桌面/手机模拟浏览器 6/6、真实文档 #38 新标签页验收 2/2；新页面仍只请求 `/api/rag/*`，不会直连 8000、9000 或 19530。
 
 2026-07-15 已新增 `law-platform-web` 和平台 RAG 网关：前端 Vitest 4/4、模拟浏览器测试 4/4（桌面 + 手机）、真实 RAG 浏览器测试 3/3；平台单元测试 22/22、HTTP E2E 15/15、Python pytest 93/93 + 5 subtests，前后端 lint 与 build 均通过。真实验收已确认劳动合同法第二十条、民法典第一千二百零二条和无依据拒答。浏览器端构建产物不含内部服务 Token，3000/8000/5432/9000/9001/9091/19530 均限制为本机监听。
 

@@ -48,6 +48,7 @@ test('mock knowledge document supports append, source filtering, and source repl
   let uploaded = false;
   let appended = false;
   let replaced = false;
+  const listPageSizes: number[] = [];
   const baseDocument = {
     doc_id: '24', attachment_id: '56', title: '浏览器多源验收', category: '法规',
     embedding_status: 'success', file_name: 'main.md', file_size: '48', source_count: 1,
@@ -92,8 +93,10 @@ test('mock knowledge document supports append, source filtering, and source repl
       return;
     }
     if (request.method() === 'GET') {
-      expect(url.searchParams.get('page_size')).toBe('5');
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: uploaded ? [{ ...baseDocument, source_count: appended ? 2 : 1 }] : [], total: uploaded ? 1 : 0, page: 1, page_size: 5 }) });
+      const pageSize = Number(url.searchParams.get('page_size'));
+      expect([5, 10, 20, 50, 100, 500, 1000]).toContain(pageSize);
+      listPageSizes.push(pageSize);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: uploaded ? [{ ...baseDocument, source_count: appended ? 2 : 1 }] : [], total: uploaded ? 1 : 0, page: 1, page_size: pageSize }) });
       return;
     }
     uploaded = true;
@@ -107,6 +110,9 @@ test('mock knowledge document supports append, source filtering, and source repl
   await page.getByLabel('文档标题').fill('浏览器多源验收');
   await page.getByRole('button', { name: '新建并自动入库' }).click();
   await expect(page.getByText(/已入库，共 1 个片段/)).toBeVisible();
+  await expect(page.getByLabel('已登记文档每页数量')).toHaveValue('5');
+  await page.getByLabel('已登记文档每页数量').selectOption('1000');
+  await expect.poll(() => listPageSizes.includes(1000)).toBe(true);
 
   await page.getByRole('button', { name: '追加文件' }).click();
   await page.getByLabel('后续文件').setInputFiles({ name: 'v2.md', mimeType: 'text/markdown', buffer: Buffer.from('# v2') });
