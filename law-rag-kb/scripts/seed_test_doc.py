@@ -111,11 +111,14 @@ def main() -> None:
             text(
                 """
                 INSERT INTO oa.kb_document
-                  (doc_title, doc_type, legal_category, attachment_id, content_text,
+                  (doc_title, doc_type, legal_category, category_id,
+                   attachment_id, content_text,
                    embedding_status, version_no, permission_level,
                    created_at, created_by, updated_at, updated_by, status)
                 VALUES
-                  (:title, '法规', '综合', :att, NULL,
+                  (:title, '法律', '法律',
+                   (SELECT id FROM oa.kb_category WHERE category_code = 'legal_law'),
+                   :att, NULL,
                    'pending', 'v1', 'public',
                    :now, :emp, :now, :emp, 'active')
                 RETURNING id

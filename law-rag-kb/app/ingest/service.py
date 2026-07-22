@@ -14,6 +14,7 @@ from app.core.database import SessionLocal
 from app.core.milvus_client import ensure_collection, get_milvus_client
 from app.core.storage import download as minio_download
 from app.core.minio_client import get_minio_client
+from app.core.storage import file_exists as minio_file_exists
 from app.core.storage import presigned_url as minio_presigned_url
 from app.core.storage import upload_derived
 from app.ingest import chunker, cleaner, embedding, image_filter, markdown_builder, parser, vl
@@ -27,6 +28,7 @@ from app.models.tables import (
     sys_attachment,
 )
 from app.rag import describe, markdown as markdown_utils
+from app.rag.category_resolver import resolve_document_categories
 
 _CHUNK_TEXT_MAX = 65535
 
@@ -126,8 +128,14 @@ class _VectorChunk:
     image_category: str | None = None
 
 
-def ingest_document(doc_id: int, *, force: bool = False) -> IngestResult:
-    """同步入库一个文档；force=True 同时重做解析、VL 和向量。"""
+def ingest_document(
+    doc_id: int,
+    *,
+    force: bool = False,
+    generate_description: bool = True,
+    analyze_images: bool = True,
+) -> IngestResult:
+    """同步入库一个文档；可按单次任务关闭付费摘要和图片分析。"""
     row = _load_document(doc_id)
     if row is None:
         raise DocumentNotFoundError("kb_document not found")
@@ -181,7 +189,7 @@ def ingest_document(doc_id: int, *, force: bool = False) -> IngestResult:
                     overlap=settings.chunk_overlap,
                 )
                 contexts = markdown_builder.image_contexts(draft_chunks)
-            if unique_images:
+            if unique_images and analyze_images:
                 with timer.stage("vl_analysis", "图片 VL 分析"):
                     analyses = _analyze_images_after_draft(
                         unique_images,
@@ -192,13 +200,19 @@ def ingest_document(doc_id: int, *, force: bool = False) -> IngestResult:
                     )
             else:
                 timer.skip("vl_analysis", "图片 VL 分析")
+                if unique_images:
+                    analyses = _cloud_disabled_image_analyses(unique_images)
             _update_image_analyses(doc_id, analyses)
             vl_status = _derive_vl_status(analyses)
             counts = _image_counts(analyses)
             _set_vl_summary(doc_id, vl_status=vl_status, **counts)
 
-            with timer.stage("summary_generation", "文档摘要生成"):
-                description_summary = _generate_doc_description(title, cleaned, analyses)
+            if generate_description:
+                with timer.stage("summary_generation", "文档摘要生成"):
+                    description_summary = _generate_doc_description(title, cleaned, analyses)
+            else:
+                timer.skip("summary_generation", "文档摘要生成")
+                description_summary = None
             with timer.stage("final_chunking", "最终 Markdown 与 Chunk 构建"):
                 analyses_by_id = {
                     image_ids[item.asset.sha256]: item
@@ -225,11 +239,13 @@ def ingest_document(doc_id: int, *, force: bool = False) -> IngestResult:
                 )
         else:
             timer.skip("markdown_draft", "初始 Markdown 和 draft Chunk")
-            if unique_images:
+            if unique_images and analyze_images:
                 with timer.stage("vl_analysis", "图片 VL 分析"):
                     analyses = _analyze_images(unique_images, doc_title=title)
             else:
                 timer.skip("vl_analysis", "图片 VL 分析")
+                if unique_images:
+                    analyses = _cloud_disabled_image_analyses(unique_images)
             with timer.stage("final_chunking", "最终 Markdown 与 Chunk 构建"):
                 image_ids = _store_image_analyses(
                     doc_id,
@@ -241,8 +257,12 @@ def ingest_document(doc_id: int, *, force: bool = False) -> IngestResult:
             vl_status = _derive_vl_status(analyses)
             counts = _image_counts(analyses)
             _set_vl_summary(doc_id, vl_status=vl_status, **counts)
-            with timer.stage("summary_generation", "文档摘要生成"):
-                description_summary = _generate_doc_description(title, cleaned, analyses)
+            if generate_description:
+                with timer.stage("summary_generation", "文档摘要生成"):
+                    description_summary = _generate_doc_description(title, cleaned, analyses)
+            else:
+                timer.skip("summary_generation", "文档摘要生成")
+                description_summary = None
             body_markdown = None
 
         if not vector_chunks:
@@ -512,6 +532,7 @@ def promote_staging_document(staging_doc_id: int, target_doc_id: int) -> IngestR
                 "doc_title": locked_staging["doc_title"],
                 "doc_type": locked_staging["doc_type"],
                 "legal_category": locked_staging["legal_category"],
+                "category_id": locked_staging["category_id"],
                 "attachment_id": new_attachment_id,
                 "content_text": locked_staging["content_text"],
                 "description_summary": locked_staging["description_summary"],
@@ -619,6 +640,130 @@ def cleanup_staging_document(staging_doc_id: int) -> None:
         _remove_object_safely(bucket, object_key)
 
 
+def purge_documents(doc_ids: list[int]) -> dict[str, int]:
+    """Best-effort purge of derived artifacts for deleted documents.
+
+    The caller (platform-api) is responsible for soft-deleting the
+    kb_document / kb_document_source / sys_attachment rows. This function
+    only cleans up Milvus chunks, kb_document_image rows and their MinIO
+    objects. It is intentionally idempotent and swallow failures so that a
+    failed purge can be retried without side effects.
+    """
+    if not doc_ids:
+        return {"purged": 0, "images_removed": 0}
+
+    objects: list[tuple[str | None, str | None]] = []
+    with SessionLocal() as db:
+        images = db.execute(
+            select(
+                kb_document_image.c.document_id,
+                kb_document_image.c.bucket_name,
+                kb_document_image.c.object_key,
+            ).where(kb_document_image.c.document_id.in_(doc_ids))
+        ).mappings().all()
+        objects.extend(
+            (item["bucket_name"], item["object_key"]) for item in images
+        )
+        db.execute(
+            delete(kb_document_image).where(
+                kb_document_image.c.document_id.in_(doc_ids)
+            )
+        )
+        db.commit()
+
+    client = get_milvus_client()
+    for doc_id in doc_ids:
+        try:
+            client.delete(
+                settings.milvus_collection,
+                filter=f"doc_id == {doc_id}",
+            )
+        except Exception:
+            pass
+
+    for bucket, object_key in objects:
+        _remove_object_safely(bucket, object_key)
+
+    return {"purged": len(doc_ids), "images_removed": len(objects)}
+
+
+def verify_restore_artifacts(doc_ids: list[int]) -> dict:
+    """检查每个已软删文档恢复所需的 RAG 侧派生产物是否齐全。
+
+    校验范围：
+    - 成功文档（embedding_status='success'）的 Milvus chunks 必须仍存在；
+    - 各文档的派生图片对象（kb_document_image 指向的 MinIO 对象）必须仍存在。
+
+    原件（sys_attachment.object_key）由 platform-api 自行校验，本函数不负责。
+    embedding_status != 'success' 的文档从未生成向量，跳过 chunk 校验。
+
+    用 _count_chunks_strict（会抛错）而非 _count_chunks（会吞错）：恢复校验必须把
+    Milvus 异常显式上报，避免把"服务故障"误判为"向量齐全"。
+    """
+    if not doc_ids:
+        return {"items": []}
+
+    with SessionLocal() as db:
+        doc_rows = db.execute(
+            select(
+                kb_document.c.id,
+                kb_document.c.embedding_status,
+            ).where(kb_document.c.id.in_(doc_ids))
+        ).mappings().all()
+        embedding_by_doc = {
+            int(r["id"]): r["embedding_status"] for r in doc_rows
+        }
+
+        image_rows = db.execute(
+            select(
+                kb_document_image.c.document_id,
+                kb_document_image.c.bucket_name,
+                kb_document_image.c.object_key,
+            ).where(kb_document_image.c.document_id.in_(doc_ids))
+        ).mappings().all()
+
+    images_by_doc: dict[int, list[tuple[str | None, str | None]]] = {}
+    for r in image_rows:
+        images_by_doc.setdefault(int(r["document_id"]), []).append(
+            (r["bucket_name"], r["object_key"])
+        )
+
+    items: list[dict] = []
+    for doc_id in doc_ids:
+        missing_chunks = 0
+        missing_images: list[str] = []
+
+        if embedding_by_doc.get(doc_id) == EmbeddingStatus.SUCCESS:
+            try:
+                if _count_chunks_strict(doc_id) == 0:
+                    missing_chunks = 1
+            except DocumentChunksUnavailableError:
+                # Milvus 无法提供有效结果，按"向量不可用"处理，恢复前需排查。
+                missing_chunks = 1
+
+        for bucket, object_key in images_by_doc.get(doc_id, []):
+            if not object_key:
+                continue
+            try:
+                exists = minio_file_exists(object_key, bucket)
+            except Exception:
+                # 非 NoSuchKey 的异常（网络/权限等）也视为不可恢复，避免误判。
+                exists = False
+            if not exists:
+                missing_images.append(object_key)
+
+        items.append(
+            {
+                "doc_id": doc_id,
+                "ok": missing_chunks == 0 and not missing_images,
+                "missing_chunks": missing_chunks,
+                "missing_images": missing_images,
+            }
+        )
+
+    return {"items": items}
+
+
 def build_document_markdown(
     doc_id: int, *, source_id: int | None = None
 ) -> DocumentMarkdown | None:
@@ -678,12 +823,13 @@ def build_document_markdown(
 
 def _load_document(doc_id: int):
     with SessionLocal() as db:
-        return db.execute(
+        row = db.execute(
             select(
                 kb_document.c.id,
                 kb_document.c.doc_title,
                 kb_document.c.doc_type,
                 kb_document.c.legal_category,
+                kb_document.c.category_id,
                 kb_document.c.attachment_id,
                 kb_document.c.content_text,
                 kb_document.c.description_summary,
@@ -709,6 +855,15 @@ def _load_document(doc_id: int):
                 kb_document.c.status,
             ).where(kb_document.c.id == doc_id)
         ).mappings().first()
+    if row is None:
+        return None
+    document = dict(row)
+    category = resolve_document_categories([doc_id]).get(doc_id)
+    if category is not None:
+        document["category_name"] = category.name
+        document["category_path"] = category.path
+        document["category_path_ids"] = category.path_ids
+    return document
 
 
 def _load_kept_images(doc_id: int) -> list:
@@ -1214,7 +1369,9 @@ def _build_markdown_vector_chunks(
 
 
 def _build_records(doc_id, row, chunks, dense, sparse) -> list[dict]:
-    source = (row["legal_category"] or row["doc_type"] or "")[:100]
+    source = (
+        row.get("category_name") or row["legal_category"] or row["doc_type"] or ""
+    )[:100]
     records = []
     for item, dense_vector, sparse_vector in zip(chunks, dense, sparse):
         records.append(
@@ -1240,6 +1397,8 @@ def _build_records(doc_id, row, chunks, dense, sparse) -> list[dict]:
                     "case_id": row["case_id"],
                     "dossier_no": row["dossier_no"],
                     "permission_level": row["permission_level"],
+                    "category_id": row.get("category_id"),
+                    "category_path": row.get("category_path") or [source],
                 },
             }
         )
@@ -1256,6 +1415,20 @@ def _derive_vl_status(analyses: list[ImageAnalysis]) -> str:
     if failed:
         return "failed"
     return "success"
+
+
+def _cloud_disabled_image_analyses(images: list) -> list[ImageAnalysis]:
+    """保留本地提取图片，但明确标记本次任务未调用云端 VL。"""
+    return [
+        ImageAnalysis(
+            asset=image,
+            status="filtered",
+            category="page_scan" if image.is_page_scan else None,
+            keep_for_rag=False,
+            filter_reason="cloud_analysis_disabled",
+        )
+        for image in images
+    ]
 
 
 def _image_counts(analyses: list[ImageAnalysis]) -> dict[str, int]:

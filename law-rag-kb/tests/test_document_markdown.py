@@ -157,8 +157,9 @@ class MarkdownApiTests(unittest.TestCase):
         from app.main import app
         self.client = TestClient(app)
 
+    @patch("app.api.documents.can_access_document", return_value=True)
     @patch("app.ingest.service.build_document_markdown")
-    def test_get_markdown_200(self, build_mock) -> None:
+    def test_get_markdown_200(self, build_mock, _access_mock) -> None:
         build_mock.return_value = DocumentMarkdown(
             doc_id=21,
             doc_title="合同",
@@ -173,8 +174,9 @@ class MarkdownApiTests(unittest.TestCase):
         self.assertIn("# 合同", body["markdown"])
         self.assertEqual(body["image_count"], 1)
 
+    @patch("app.api.documents.can_access_document", return_value=True)
     @patch("app.ingest.service.build_document_markdown", return_value=None)
-    def test_get_markdown_404(self, _build_mock) -> None:
+    def test_get_markdown_404(self, _build_mock, _access_mock) -> None:
         resp = self.client.get("/documents/999999/markdown")
         self.assertEqual(resp.status_code, 404)
 

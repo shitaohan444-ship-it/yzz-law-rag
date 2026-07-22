@@ -25,6 +25,7 @@ class ApiContractTests(unittest.TestCase):
                 "/documents/{doc_id}/ingest",
                 "/documents/{doc_id}",
                 "/documents/{doc_id}/chunks",
+                "/documents/batch-delete",
                 "/search",
                 "/chat",
             }.issubset(paths)
@@ -58,8 +59,9 @@ class ApiContractTests(unittest.TestCase):
         self.assertEqual(body["status"], "not_ready")
         self.assertEqual(body["models"]["embedding"], "missing")
 
+    @patch("app.api.search.authorized_doc_ids", return_value=[16])
     @patch("app.api.search.retrieve.search")
-    def test_search_serializes_article_metadata(self, search_mock) -> None:
+    def test_search_serializes_article_metadata(self, search_mock, _scope_mock) -> None:
         search_mock.return_value = [
             SearchHit(
                 chunk_id="16_0007",
@@ -204,6 +206,46 @@ class ApiContractTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "skipped")
         ingest_mock.assert_called_once_with(23, force=False)
+
+    @patch("app.api.documents.ingest_service.ingest_document")
+    def test_ingest_can_disable_cloud_summary_and_image_analysis(self, ingest_mock) -> None:
+        ingest_mock.return_value = IngestResult(23, "success", chunk_count=2)
+
+        response = self.client.post(
+            "/documents/23/ingest?generate_description=false&analyze_images=false"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        ingest_mock.assert_called_once_with(
+            23,
+            force=False,
+            generate_description=False,
+            analyze_images=False,
+        )
+
+    @patch("app.api.documents.ingest_service.purge_documents")
+    def test_batch_delete_purges_documents(self, purge_mock) -> None:
+        purge_mock.return_value = {"purged": 2, "images_removed": 3}
+
+        response = self.client.post("/documents/batch-delete", json={"doc_ids": [10, 11]})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"purged": 2, "images_removed": 3})
+        purge_mock.assert_called_once_with([10, 11])
+
+    def test_batch_delete_rejects_invalid_payloads(self) -> None:
+        self.assertEqual(
+            self.client.post("/documents/batch-delete", json={"doc_ids": []}).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.post("/documents/batch-delete", json={"doc_ids": [0]}).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.post("/documents/batch-delete", json={"doc_ids": list(range(1, 102))}).status_code,
+            422,
+        )
 
     @patch("app.api.documents.ingest_service.ingest_document")
     def test_non_not_found_ingest_failure_remains_business_response(

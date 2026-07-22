@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 import fitz
 from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from PIL import Image, ImageDraw
 
 from app.core.config import settings
@@ -91,6 +93,28 @@ class StructuredParserTests(unittest.TestCase):
         self.assertIn("图片前正文", parsed.text)
         self.assertEqual(len(parsed.images), 1)
         self.assertEqual(parsed.images[0].nearby_text, "图片前正文")
+
+    def test_docx_with_unregistered_body_elements_still_parses(self) -> None:
+        """body 顶层含 python-docx 未注册元素（如 w:bookmarkEnd/w:sdt）时不许崩。
+
+        未注册标签会被解析成裸 lxml 元素，对其调用带前缀的 xpath 会抛
+        XPathEvalError: Undefined namespace prefix（真实案例：法规 docx 的
+        _GoBack 书签下界直接挂在 body 下）。
+        """
+        doc = Document()
+        doc.add_paragraph("书签前正文")
+        doc.add_paragraph("书签后正文")
+        bookmark_end = OxmlElement("w:bookmarkEnd")
+        bookmark_end.set(qn("w:id"), "0")
+        self.assertEqual(type(bookmark_end).__module__, "lxml.etree")
+        doc.element.body.insert(1, bookmark_end)
+        output = BytesIO()
+        doc.save(output)
+
+        parsed = parser.parse(output.getvalue(), "docx")
+
+        self.assertIn("书签前正文", parsed.text)
+        self.assertIn("书签后正文", parsed.text)
 
 
 class CleaningAndPrefilterTests(unittest.TestCase):
