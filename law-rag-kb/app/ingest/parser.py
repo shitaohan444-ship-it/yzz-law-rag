@@ -4,6 +4,7 @@ from pathlib import Path
 
 import fitz
 from docx import Document
+from docx.oxml.ns import qn
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 from PIL import Image, UnidentifiedImageError
@@ -195,7 +196,13 @@ def _parse_docx(content: bytes) -> ParsedDocument:
                 order += 1
                 recent_text = table_md[:800]
 
-        for relationship_id in child.xpath(".//a:blip/@r:embed"):
+        # 用 Clark 记法而非带前缀的 xpath：body 里未在 python-docx 注册的元素
+        # （如 w:bookmarkEnd/w:sdt）是裸 lxml 元素，前缀 xpath 会因缺少
+        # 命名空间映射抛 XPathEvalError，导致整篇入库失败。
+        for blip in child.iter(qn("a:blip")):
+            relationship_id = blip.get(qn("r:embed"))
+            if not relationship_id:
+                continue
             part = doc.part.related_parts.get(relationship_id)
             image_bytes = getattr(part, "blob", None)
             if not image_bytes:

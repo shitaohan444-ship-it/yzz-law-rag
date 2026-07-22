@@ -61,6 +61,18 @@ class ArticleChunkingTests(unittest.TestCase):
         self.assertGreater(len(chunks), 1)
         self.assertTrue(all(c.article_no is None for c in chunks))
 
+    def test_long_text_without_separators_falls_back_to_fixed_step(self) -> None:
+        """超长且不含任何分隔符的文本走定长步进兜底，不抛 empty separator。
+
+        回归：_SEPARATORS 末尾曾有 ""，递归降到 text.split("") 会抛
+        ValueError: empty separator（真实案例：香港基本法解释 docx 含超长无标点段）。
+        """
+        chunks = split("法" * 5000, chunk_size=1000, overlap=100, by_article=False)
+
+        self.assertGreater(len(chunks), 1)
+        for chunk in chunks:
+            self.assertLessEqual(len(chunk.text), 1000)
+
     def test_article_references_in_notes_do_not_trigger_structured_chunking(self) -> None:
         text = """# 律师实务笔记
 诉讼时效需要结合案件事实判断。

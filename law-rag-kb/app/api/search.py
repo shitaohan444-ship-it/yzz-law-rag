@@ -41,6 +41,8 @@ class SearchHitModel(BaseModel):
     image_id: int | None = None
     page_no: int | None = None
     image_category: str | None = None
+    category_id: int | None = None
+    category_path: list[str] | None = None
 
 
 class SearchResponse(BaseModel):
@@ -99,6 +101,8 @@ def search(
                 image_id=h.image_id,
                 page_no=h.page_no,
                 image_category=h.image_category,
+                category_id=h.category_id,
+                category_path=h.category_path,
             )
             for index, h in enumerate(hits)
         ],

@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.milvus_client import ensure_collection, get_milvus_client
 from app.ingest import embedding
 from app.rag import reranker
+from app.rag.category_resolver import resolve_document_categories
 
 # sparse 检索丢弃高频词权重比例（与 BGE-M3 官方推荐一致）
 _SPARSE_DROP_RATIO = 0.2
@@ -55,6 +56,8 @@ class SearchHit:
     image_id: int | None = None
     page_no: int | None = None
     image_category: str | None = None
+    category_id: int | None = None
+    category_path: list[str] | None = None
 
 
 def search(
@@ -121,9 +124,19 @@ def search(
             image_id=(h.meta or {}).get("image_id"),
             page_no=(h.meta or {}).get("page_no"),
             image_category=(h.meta or {}).get("image_category"),
+            category_id=(h.meta or {}).get("category_id"),
+            category_path=(h.meta or {}).get("category_path"),
         )
         for h, s in ranked[:rerank_top]
     ]
+    categories = resolve_document_categories([hit.doc_id for hit in result])
+    for hit in result:
+        category = categories.get(hit.doc_id)
+        if category is not None:
+            hit.doc_title = category.doc_title
+            hit.source = category.name
+            hit.category_id = category.category_id
+            hit.category_path = category.path
     if timings is not None:
         timings["retrieve_total_ms"] = (perf_counter() - total_started) * 1000
     return result

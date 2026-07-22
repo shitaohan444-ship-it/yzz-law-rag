@@ -12,6 +12,8 @@ export interface RagHit {
   image_id?: number | null;
   page_no?: number | null;
   image_category?: string | null;
+  category_id?: number | null;
+  category_path?: string[] | null;
 }
 
 export interface RagSearchResponse {
@@ -113,4 +115,15 @@ export interface RagSourcePromotionResponse {
   image_total: number;
   upload_timings: RagProcessingTimings | null;
   ingest_timings: RagProcessingTimings | null;
+}
+
+export interface RagVerifyRestoreItem {
+  doc_id: number;
+  ok: boolean;
+  missing_chunks: number;
+  missing_images: string[];
+}
+
+export interface RagVerifyRestoreResponse {
+  items: RagVerifyRestoreItem[];
 }

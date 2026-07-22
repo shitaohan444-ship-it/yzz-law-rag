@@ -1,7 +1,4 @@
-import { IsIn, IsString, MaxLength, MinLength } from 'class-validator';
-
-export const KNOWLEDGE_CATEGORIES = ['法规', '案例', '工作资料'] as const;
-export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number];
+import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class CreateKnowledgeDocumentDto {
   @IsString()
@@ -9,6 +6,6 @@ export class CreateKnowledgeDocumentDto {
   @MaxLength(255)
   title!: string;
 
-  @IsIn(KNOWLEDGE_CATEGORIES)
-  category!: KnowledgeCategory;
+  @Matches(/^[1-9]\d*$/)
+  category_id!: string;
 }

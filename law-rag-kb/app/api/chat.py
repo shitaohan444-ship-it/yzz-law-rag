@@ -46,6 +46,8 @@ class ChatRefModel(BaseModel):
     image_id: int | None = None
     page_no: int | None = None
     image_category: str | None = None
+    category_id: int | None = None
+    category_path: list[str] | None = None
     text: str = ""
 
 

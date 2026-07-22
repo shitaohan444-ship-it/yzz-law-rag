@@ -31,11 +31,17 @@ class SourcesRebuildRequest(BaseModel):
     items: list[SourceRebuildItem] = Field(min_length=1, max_length=100)
 
 
+class BatchDeleteRequest(BaseModel):
+    doc_ids: list[Annotated[int, Field(gt=0)]] = Field(min_length=1, max_length=100)
+
+
 @router.post("/{doc_id}/ingest")
 def ingest(
     doc_id: Annotated[int, Path(gt=0)],
     _principal: Annotated[Principal, Depends(require_service_principal)],
     force: bool = False,
+    generate_description: bool = True,
+    analyze_images: bool = True,
 ):
     """同步入库一个 kb_document。
 
@@ -43,7 +49,12 @@ def ingest(
     普通函数由 Starlette 扔进 threadpool 跑，不卡 /health 等其它请求。
     """
     try:
-        result = ingest_service.ingest_document(doc_id, force=force)
+        options = {"force": force}
+        if not generate_description:
+            options["generate_description"] = False
+        if not analyze_images:
+            options["analyze_images"] = False
+        result = ingest_service.ingest_document(doc_id, **options)
     except ingest_service.DocumentNotFoundError:
         raise HTTPException(status_code=404, detail="kb_document not found") from None
     return dataclasses.asdict(result)
@@ -109,6 +120,30 @@ def rebuild_sources(
     except source_service.SourcePromotionError:
         raise HTTPException(status_code=409, detail="source rebuild rejected") from None
     return dataclasses.asdict(result)
+
+
+@router.post("/batch-delete")
+def batch_delete(
+    req: BatchDeleteRequest,
+    _principal: Annotated[Principal, Depends(require_service_principal)],
+):
+    """清理已删除文档的 Milvus chunks、图片记录与对象（幂等）。"""
+    result = ingest_service.purge_documents(req.doc_ids)
+    return result
+
+
+@router.post("/verify-restore")
+def verify_restore(
+    req: BatchDeleteRequest,
+    _principal: Annotated[Principal, Depends(require_service_principal)],
+):
+    """校验已软删文档恢复所需的 RAG 侧派生产物是否齐全。
+
+    校验 Milvus chunks（成功文档）与派生图片对象是否存在；原件由 platform-api
+    自行校验。返回每个文档的缺失明细，供 platform-api 恢复前做原子校验：
+    任一文档 !ok 则不写库。
+    """
+    return ingest_service.verify_restore_artifacts(req.doc_ids)
 
 
 @router.delete("/{staging_doc_id}/staging")

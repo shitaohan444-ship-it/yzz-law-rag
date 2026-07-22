@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
@@ -15,12 +16,26 @@ import { RagService } from '../rag/rag.service';
 import { CreateKnowledgeDocumentDto } from './dto/create-knowledge-document.dto';
 import { AppendDocumentSourceDto } from './dto/append-document-source.dto';
 import { QueryKnowledgeDocumentsDto } from './dto/query-knowledge-documents.dto';
+import { QueryTrashDocumentsDto } from './dto/query-trash-documents.dto';
+import { UpdateDocumentCategoryDto } from './dto/update-document-category.dto';
+import { UpdateDocumentTitleDto } from './dto/update-document-title.dto';
+import { BatchMoveDocumentsDto } from './dto/batch-move-documents.dto';
+import { BatchDeleteDocumentsDto } from './dto/batch-delete-documents.dto';
+import { BatchRestoreDocumentsDto } from './dto/batch-restore-documents.dto';
+import { BatchPurgeDocumentsDto } from './dto/batch-purge-documents.dto';
+import { KnowledgeCategoriesService } from './knowledge-categories.service';
 import {
   KnowledgeDocumentSummary,
   KnowledgeDocumentReplaceResponse,
   KnowledgeDocumentSource,
   KnowledgeDocumentSourceMutationResponse,
   KnowledgeDocumentUploadResponse,
+  KnowledgeDocumentBatchMoveResponse,
+  KnowledgeDocumentBatchDeleteResponse,
+  KnowledgeDocumentBatchRestoreResponse,
+  KnowledgeDocumentBatchPurgeResponse,
+  TrashDocumentSummary,
+  TrashListResponse,
   ProcessingTimings,
 } from './knowledge-documents.types';
 
@@ -55,6 +70,7 @@ type SourceRow = {
   ingest_status: string;
   chunk_count: number;
   image_total: number;
+  uploaded_at: Date;
   upload_timings: ProcessingTimings | null;
   ingest_timings: ProcessingTimings | null;
 };
@@ -68,6 +84,7 @@ export class KnowledgeDocumentsService {
     private readonly prisma: PrismaService,
     private readonly storage: MinioService,
     private readonly rag: RagService,
+    private readonly categories: KnowledgeCategoriesService,
   ) {}
 
   async listSources(
@@ -94,6 +111,7 @@ export class KnowledgeDocumentsService {
             : '该文件已存在于其他知识库文档中',
         );
       }
+      await this.assertHashNotSoftDeleted(prepared.hash);
       const timer = new UploadTimer();
       timer.record('validate_hash', '文件校验与 SHA-256', 0, 'success');
       await timer.measure('duplicate_check', '重复文件检查', () =>
@@ -228,6 +246,7 @@ export class KnowledgeDocumentsService {
       ) {
         throw new ConflictException('文件与当前来源版本一致');
       }
+      await this.assertHashNotSoftDeleted(prepared.hash);
       const timer = new UploadTimer();
       timer.record('validate_hash', '文件校验与 SHA-256', 0, 'success');
       const now = new Date();
@@ -386,6 +405,9 @@ export class KnowledgeDocumentsService {
         if (!title) throw new BadRequestException('文档标题不能为空');
         hash = createHash('sha256').update(file.buffer).digest('hex');
       });
+      const category = await this.categories.requireAssignable(
+        BigInt(dto.category_id),
+      );
 
       const current = await this.prisma.kb_document.findFirst({
         where: { id: docId, deleted_at: null, status: 'active' },
@@ -407,11 +429,11 @@ export class KnowledgeDocumentsService {
         throw new ConflictException('该文件已存在于其他知识库文档中');
       }
       const metadataChanged =
-        current.doc_title !== title ||
-        (current.legal_category ?? current.doc_type) !== dto.category;
+        current.doc_title !== title || current.category_id !== category.id;
       if (existingDocId === docId && !metadataChanged) {
         throw new ConflictException('文件与当前版本一致');
       }
+      await this.assertHashNotSoftDeleted(hash);
 
       const now = new Date();
       const extension = extname(filename).toLowerCase().slice(1);
@@ -467,8 +489,9 @@ export class KnowledgeDocumentsService {
             const document = await tx.kb_document.create({
               data: {
                 doc_title: title,
-                doc_type: dto.category,
-                legal_category: dto.category,
+                doc_type: category.name,
+                legal_category: category.name,
+                category_id: category.id,
                 attachment_id: attachment.id,
                 content_text: null,
                 embedding_status: 'pending',
@@ -552,6 +575,9 @@ export class KnowledgeDocumentsService {
       if (!title) throw new BadRequestException('文档标题不能为空');
       hash = createHash('sha256').update(file.buffer).digest('hex');
     });
+    const category = await this.categories.requireAssignable(
+      BigInt(dto.category_id),
+    );
 
     const existing = await timer.measure(
       'duplicate_check',
@@ -566,6 +592,7 @@ export class KnowledgeDocumentsService {
         deduplicated: true,
       };
     }
+    await this.assertHashNotSoftDeleted(hash);
 
     const now = new Date();
     const extension = extname(filename).toLowerCase().slice(1);
@@ -622,8 +649,9 @@ export class KnowledgeDocumentsService {
             const created = await tx.kb_document.create({
               data: {
                 doc_title: title,
-                doc_type: dto.category,
-                legal_category: dto.category,
+                doc_type: category.name,
+                legal_category: category.name,
+                category_id: category.id,
                 attachment_id: attachment.id,
                 content_text: null,
                 embedding_status: 'pending',
@@ -654,13 +682,7 @@ export class KnowledgeDocumentsService {
       const timings = timer.report('success');
       await this.persistUploadTimings(document.document.id, timings);
       return {
-        document: this.toSummary(
-          document.attachment,
-          document.document,
-          0,
-          timings,
-          null,
-        ),
+        document: await this.getSummary(document.document.id),
         deduplicated: false,
       };
     } catch (error: unknown) {
@@ -683,14 +705,29 @@ export class KnowledgeDocumentsService {
   }
 
   async list(query: QueryKnowledgeDocumentsDto) {
+    // kb_document 是知识库归属的权威记录；早期种子数据的附件 biz_type 为 document，
+    // 不能用附件类型过滤，否则分类计数会包含文档而管理列表看不到它们。
     const conditions: Prisma.Sql[] = [
       Prisma.sql`d.deleted_at IS NULL`,
       Prisma.sql`d.status = 'active'`,
       Prisma.sql`a.deleted_at IS NULL`,
-      Prisma.sql`a.biz_type = 'knowledge_base'`,
     ];
-    if (query.category)
-      conditions.push(Prisma.sql`d.legal_category = ${query.category}`);
+    if (query.category_id) {
+      const categoryId = BigInt(query.category_id);
+      conditions.push(Prisma.sql`
+        d.category_id IN (
+          WITH RECURSIVE descendants AS (
+            SELECT id FROM oa.kb_category
+            WHERE id = ${categoryId} AND deleted_at IS NULL AND status = 'active'
+            UNION ALL
+            SELECT child.id FROM oa.kb_category child
+            JOIN descendants parent ON child.parent_id = parent.id
+            WHERE child.deleted_at IS NULL AND child.status = 'active'
+          )
+          SELECT id FROM descendants
+        )
+      `);
+    }
     if (query.status)
       conditions.push(Prisma.sql`d.embedding_status = ${query.status}`);
     const keyword = query.keyword?.trim();
@@ -704,27 +741,59 @@ export class KnowledgeDocumentsService {
       attachment_id: bigint;
       title: string;
       category: string | null;
+      category_id: bigint;
+      category_name: string;
+      category_path: string[];
+      category_path_ids: bigint[];
+      category_sensitive: boolean;
       embedding_status: string;
       file_name: string;
       file_size: bigint | null;
       image_total: number | null;
       created_at: Date;
+      last_uploaded_at: Date;
       upload_timings: ProcessingTimings | null;
       ingest_timings: ProcessingTimings | null;
       source_count: bigint;
     };
     const [rows, counts] = await Promise.all([
       this.prisma.$queryRaw<Row[]>(Prisma.sql`
+        WITH RECURSIVE category_paths AS (
+          SELECT c.id, c.parent_id, ARRAY[c.category_name]::text[] AS path,
+                 ARRAY[c.id]::bigint[] AS path_ids, c.sensitive AS effective_sensitive
+          FROM oa.kb_category c
+          WHERE c.parent_id IS NULL AND c.deleted_at IS NULL
+          UNION ALL
+          SELECT child.id, child.parent_id, parent.path || child.category_name,
+                 parent.path_ids || child.id,
+                 parent.effective_sensitive OR child.sensitive
+          FROM oa.kb_category child
+          JOIN category_paths parent ON child.parent_id = parent.id
+          WHERE child.deleted_at IS NULL
+        )
         SELECT d.id AS doc_id, a.id AS attachment_id, d.doc_title AS title,
-               d.legal_category AS category, d.embedding_status,
+               array_to_string(cp.path, ' / ') AS category,
+               d.category_id, c.category_name, cp.path AS category_path,
+               cp.path_ids AS category_path_ids,
+               cp.effective_sensitive AS category_sensitive,
+               d.embedding_status,
                COALESCE(a.original_file_name, a.file_name) AS file_name,
                a.file_size, COALESCE(d.image_total, 0) AS image_total, d.created_at,
+               COALESCE((SELECT MAX(COALESCE(
+                  (s.upload_timings->>'completed_at')::timestamptz,
+                  s.created_at
+                ))
+                FROM oa.kb_document_source s
+                WHERE s.document_id = d.id AND s.deleted_at IS NULL
+                  AND s.status = 'active'), d.created_at) AS last_uploaded_at,
                d.upload_timings, d.ingest_timings,
                (SELECT COUNT(*) FROM oa.kb_document_source s
                 WHERE s.document_id = d.id AND s.deleted_at IS NULL
                   AND s.status = 'active')::bigint AS source_count
         FROM oa.kb_document d
         JOIN oa.sys_attachment a ON a.id = d.attachment_id
+        JOIN oa.kb_category c ON c.id = d.category_id
+        JOIN category_paths cp ON cp.id = d.category_id
         WHERE ${where}
         ORDER BY d.created_at DESC, d.id DESC
         LIMIT ${query.page_size} OFFSET ${offset}
@@ -743,12 +812,18 @@ export class KnowledgeDocumentsService {
             doc_id: row.doc_id.toString(),
             attachment_id: row.attachment_id.toString(),
             title: row.title,
-            category: row.category ?? '未分类',
+            category: row.category ?? row.category_name,
+            category_id: row.category_id.toString(),
+            category_name: row.category_name,
+            category_path: row.category_path,
+            category_path_ids: row.category_path_ids.map(String),
+            category_sensitive: row.category_sensitive,
             embedding_status: row.embedding_status,
             file_name: row.file_name,
             file_size: row.file_size?.toString() ?? null,
             image_total: Number(row.image_total ?? 0),
             created_at: row.created_at.toISOString(),
+            last_uploaded_at: row.last_uploaded_at.toISOString(),
             upload_timings: row.upload_timings,
             ingest_timings: row.ingest_timings,
             source_count: Number(row.source_count),
@@ -760,12 +835,496 @@ export class KnowledgeDocumentsService {
     };
   }
 
+  async updateCategory(
+    docId: bigint,
+    dto: UpdateDocumentCategoryDto,
+  ): Promise<KnowledgeDocumentSummary> {
+    await this.assertActiveDocument(docId);
+    const category = await this.categories.requireAssignable(
+      BigInt(dto.category_id),
+    );
+    await this.prisma.$executeRaw(Prisma.sql`
+      UPDATE oa.kb_document
+      SET category_id = ${category.id}, legal_category = ${category.name},
+          updated_at = NOW()
+      WHERE id = ${docId} AND deleted_at IS NULL AND status = 'active'
+    `);
+    return this.getSummary(docId);
+  }
+
+  async updateTitle(
+    docId: bigint,
+    dto: UpdateDocumentTitleDto,
+  ): Promise<KnowledgeDocumentSummary> {
+    await this.assertActiveDocument(docId);
+    await this.prisma.$executeRaw(Prisma.sql`
+      UPDATE oa.kb_document
+      SET doc_title = ${dto.title.trim()}, updated_at = NOW()
+      WHERE id = ${docId} AND deleted_at IS NULL AND status = 'active'
+    `);
+    return this.getSummary(docId);
+  }
+
+  async batchMove(
+    dto: BatchMoveDocumentsDto,
+  ): Promise<KnowledgeDocumentBatchMoveResponse> {
+    const idSet = new Set(dto.doc_ids);
+    const ids = [...idSet].map((id) => BigInt(id));
+    const category = await this.categories.requireAssignable(
+      BigInt(dto.category_id),
+    );
+    await this.requireActiveDocuments(ids);
+    const result = await this.prisma.$executeRaw<number>(Prisma.sql`
+      UPDATE oa.kb_document
+      SET category_id = ${category.id},
+          legal_category = ${category.name},
+          updated_at = NOW()
+      WHERE id IN (${Prisma.join(ids)})
+        AND deleted_at IS NULL
+        AND status = 'active'
+    `);
+    return {
+      moved: Number(result),
+      category_id: category.id.toString(),
+      category_path: category.path,
+    };
+  }
+
+  async batchDelete(
+    dto: BatchDeleteDocumentsDto,
+  ): Promise<KnowledgeDocumentBatchDeleteResponse> {
+    const idSet = new Set(dto.doc_ids);
+    const ids = [...idSet].map((id) => BigInt(id));
+    await this.requireActiveDocuments(ids);
+
+    const attachments = await this.prisma.$queryRaw<
+      Array<{ id: bigint; bucket: string | null; object_key: string | null }>
+    >(Prisma.sql`
+      SELECT DISTINCT a.id, a.bucket, a.object_key
+      FROM oa.sys_attachment a
+      WHERE a.deleted_at IS NULL
+        AND a.status = 'active'
+        AND (
+          a.id IN (
+            SELECT d.attachment_id FROM oa.kb_document d
+            WHERE d.id IN (${Prisma.join(ids)}) AND d.deleted_at IS NULL AND d.status = 'active'
+          )
+          OR a.id IN (
+            SELECT s.attachment_id FROM oa.kb_document_source s
+            WHERE s.document_id IN (${Prisma.join(ids)}) AND s.deleted_at IS NULL AND s.status = 'active'
+          )
+        )
+    `);
+
+    return this.withDocumentLocks(ids, async () => {
+      const now = new Date();
+      await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE oa.kb_document
+          SET status = 'deleted', deleted_at = ${now}, updated_at = ${now}
+          WHERE id IN (${Prisma.join(ids)})
+            AND deleted_at IS NULL
+            AND status = 'active'
+        `);
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE oa.kb_document_source
+          SET status = 'deleted', deleted_at = ${now}, updated_at = ${now}
+          WHERE document_id IN (${Prisma.join(ids)})
+            AND deleted_at IS NULL
+            AND status = 'active'
+        `);
+        if (attachments.length > 0) {
+          const attachmentIds = attachments.map((a) => a.id);
+          await tx.$executeRaw(Prisma.sql`
+            UPDATE oa.sys_attachment
+            SET status = 'soft_deleted', deleted_at = ${now}, updated_at = ${now}
+            WHERE id IN (${Prisma.join(attachmentIds)})
+              AND deleted_at IS NULL
+              AND status = 'active'
+          `);
+        }
+      });
+
+      // 纯软删除：保留原件、派生图片与 Milvus 向量，不访问对象存储或 RAG 服务。
+      // 文档可经"回收站"恢复或永久删除。检索授权门已按 status='active' AND deleted_at IS NULL
+      // 过滤，软删文档对 /search、/chat 不可见。
+      return {
+        deleted: ids.length,
+        mode: 'soft' as const,
+        artifacts_retained: true as const,
+      };
+    });
+  }
+
+  async listTrash(query: QueryTrashDocumentsDto): Promise<TrashListResponse> {
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`d.deleted_at IS NOT NULL`,
+      Prisma.sql`d.status = 'deleted'`,
+    ];
+    if (query.category_id) {
+      const categoryId = BigInt(query.category_id);
+      // 回收站筛选需兼容已停用的原分类，故后代 CTE 不过滤 status='active'。
+      conditions.push(Prisma.sql`
+        d.category_id IN (
+          WITH RECURSIVE descendants AS (
+            SELECT id FROM oa.kb_category
+            WHERE id = ${categoryId} AND deleted_at IS NULL
+            UNION ALL
+            SELECT child.id FROM oa.kb_category child
+            JOIN descendants parent ON child.parent_id = parent.id
+            WHERE child.deleted_at IS NULL
+          )
+          SELECT id FROM descendants
+        )
+      `);
+    }
+    const keyword = query.keyword?.trim();
+    if (keyword)
+      conditions.push(Prisma.sql`d.doc_title ILIKE ${`%${keyword}%`}`);
+    const where = Prisma.join(conditions, ' AND ');
+    const offset = (query.page - 1) * query.page_size;
+    const orderBy =
+      query.sort === 'title'
+        ? query.order === 'asc'
+          ? Prisma.sql`ORDER BY d.doc_title ASC, d.id DESC`
+          : Prisma.sql`ORDER BY d.doc_title DESC, d.id DESC`
+        : query.order === 'asc'
+          ? Prisma.sql`ORDER BY d.deleted_at ASC, d.id DESC`
+          : Prisma.sql`ORDER BY d.deleted_at DESC, d.id DESC`;
+
+    type Row = {
+      doc_id: bigint;
+      attachment_id: bigint | null;
+      title: string;
+      category_id: bigint | null;
+      category_name: string | null;
+      category_path: string[] | null;
+      category_path_ids: bigint[] | null;
+      category_valid: boolean;
+      deleted_at: Date;
+      embedding_status: string;
+      file_name: string | null;
+      file_size: bigint | null;
+      source_count: bigint;
+    };
+    const [rows, counts] = await Promise.all([
+      this.prisma.$queryRaw<Row[]>(Prisma.sql`
+        WITH RECURSIVE category_paths AS (
+          SELECT c.id, c.parent_id, ARRAY[c.category_name]::text[] AS path,
+                 ARRAY[c.id]::bigint[] AS path_ids
+          FROM oa.kb_category c
+          WHERE c.parent_id IS NULL AND c.deleted_at IS NULL
+          UNION ALL
+          SELECT child.id, child.parent_id, parent.path || child.category_name,
+                 parent.path_ids || child.id
+          FROM oa.kb_category child
+          JOIN category_paths parent ON child.parent_id = parent.id
+          WHERE child.deleted_at IS NULL
+        )
+        SELECT d.id AS doc_id, a.id AS attachment_id, d.doc_title AS title,
+               d.category_id, c.category_name,
+               cp.path AS category_path, cp.path_ids AS category_path_ids,
+               (c.id IS NOT NULL AND c.status = 'active' AND c.assignable IS TRUE) AS category_valid,
+               d.deleted_at, d.embedding_status,
+               COALESCE(a.original_file_name, a.file_name) AS file_name,
+               a.file_size,
+               (SELECT COUNT(*) FROM oa.kb_document_source s
+                WHERE s.document_id = d.id) AS source_count
+        FROM oa.kb_document d
+        LEFT JOIN oa.sys_attachment a ON a.id = d.attachment_id
+        LEFT JOIN oa.kb_category c ON c.id = d.category_id
+        LEFT JOIN category_paths cp ON cp.id = d.category_id
+        WHERE ${where}
+        ${orderBy}
+        LIMIT ${query.page_size} OFFSET ${offset}
+      `),
+      this.prisma.$queryRaw<{ total: bigint }[]>(Prisma.sql`
+        SELECT COUNT(*)::bigint AS total
+        FROM oa.kb_document d
+        WHERE ${where}
+      `),
+    ]);
+    return {
+      items: rows.map((row) => {
+        const categoryValid = Boolean(row.category_valid);
+        return {
+          doc_id: row.doc_id.toString(),
+          attachment_id: row.attachment_id?.toString() ?? '',
+          title: row.title,
+          category_id: row.category_id?.toString() ?? null,
+          category_name: row.category_name ?? null,
+          category_path: row.category_path ?? null,
+          category_path_ids: row.category_path_ids?.map(String) ?? null,
+          category_valid: categoryValid,
+          restorable: categoryValid,
+          deleted_at: row.deleted_at.toISOString(),
+          embedding_status: row.embedding_status,
+          file_name: row.file_name ?? '',
+          file_size: row.file_size?.toString() ?? null,
+          source_count: Number(row.source_count),
+        } satisfies TrashDocumentSummary;
+      }),
+      total: Number(counts[0]?.total ?? 0),
+      page: query.page,
+      page_size: query.page_size,
+    };
+  }
+
+  async batchRestore(
+    dto: BatchRestoreDocumentsDto,
+  ): Promise<KnowledgeDocumentBatchRestoreResponse> {
+    const idSet = new Set(dto.doc_ids);
+    const ids = [...idSet].map((id) => BigInt(id));
+    await this.requireDeletedDocuments(ids);
+
+    // 1) 解析每个文档的原分类是否仍可归档；失效的必须在 category_overrides 中给出新分类。
+    const overrides = dto.category_overrides ?? {};
+    const docRows = await this.prisma.$queryRaw<
+      Array<{ id: bigint; category_valid: boolean }>
+    >(Prisma.sql`
+      SELECT d.id,
+             (c.id IS NOT NULL AND c.status = 'active' AND c.assignable IS TRUE) AS category_valid
+      FROM oa.kb_document d
+      LEFT JOIN oa.kb_category c ON c.id = d.category_id
+      WHERE d.id IN (${Prisma.join(ids)}) AND d.status = 'deleted'
+    `);
+    const newCategoryByDoc = new Map<bigint, { id: bigint; name: string }>();
+    for (const row of docRows) {
+      if (row.category_valid) continue; // 原分类有效，保持不变
+      const override = overrides[row.id.toString()];
+      if (!override) {
+        throw new UnprocessableEntityException({
+          code: 'RESTORE_CATEGORY_INVALID',
+          message: `文档 ${row.id} 的原分类已失效，需指定新的可归档分类`,
+          doc_id: row.id.toString(),
+        });
+      }
+      const cat = await this.categories.requireAssignable(BigInt(override));
+      newCategoryByDoc.set(row.id, { id: cat.id, name: cat.name });
+    }
+
+    // 2) 校验原件仍存在于 MinIO（任一缺失则不写库）。
+    const originals = await this.prisma.$queryRaw<
+      Array<{ id: bigint; bucket: string | null; object_key: string | null }>
+    >(Prisma.sql`
+      SELECT DISTINCT a.id, a.bucket, a.object_key
+      FROM oa.sys_attachment a
+      WHERE a.status = 'soft_deleted' AND a.deleted_at IS NOT NULL
+        AND (
+          a.id IN (
+            SELECT d.attachment_id FROM oa.kb_document d
+            WHERE d.id IN (${Prisma.join(ids)}) AND d.attachment_id IS NOT NULL
+          )
+          OR a.id IN (
+            SELECT s.attachment_id FROM oa.kb_document_source s
+            WHERE s.document_id IN (${Prisma.join(ids)}) AND s.attachment_id IS NOT NULL
+          )
+        )
+    `);
+    for (const a of originals) {
+      const exists = await this.storage.fileExists(
+        a.object_key ?? '',
+        a.bucket ?? undefined,
+      );
+      if (!exists) {
+        throw new UnprocessableEntityException({
+          code: 'RESTORE_ORIGINAL_MISSING',
+          message: '部分原件已丢失，无法恢复，请改用永久删除',
+          object_key: a.object_key,
+        });
+      }
+    }
+
+    // 3) 校验 RAG 侧派生产物（Milvus chunks + 派生图片）齐全。
+    const verify = await this.rag.verifyRestoreDocuments(ids.map(String));
+    const failed = verify.items.filter((item) => !item.ok);
+    if (failed.length > 0) {
+      throw new UnprocessableEntityException({
+        code: 'RESTORE_ARTIFACTS_MISSING',
+        message: '部分文档的向量或派生图片已丢失，无法恢复，请改用永久删除',
+        details: failed,
+      });
+    }
+
+    // 4) 单事务原子恢复：不重新解析或生成向量。
+    const attachmentIds = originals.map((a) => a.id);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE oa.kb_document
+        SET status = 'active', deleted_at = NULL, updated_at = NOW()
+        WHERE id IN (${Prisma.join(ids)}) AND status = 'deleted'
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE oa.kb_document_source
+        SET status = 'active', deleted_at = NULL, updated_at = NOW()
+        WHERE document_id IN (${Prisma.join(ids)}) AND status = 'deleted'
+      `);
+      if (attachmentIds.length > 0) {
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE oa.sys_attachment
+          SET status = 'active', deleted_at = NULL, updated_at = NOW()
+          WHERE id IN (${Prisma.join(attachmentIds)}) AND status = 'soft_deleted'
+        `);
+      }
+      for (const [docId, cat] of newCategoryByDoc) {
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE oa.kb_document
+          SET category_id = ${cat.id}, legal_category = ${cat.name}, updated_at = NOW()
+          WHERE id = ${docId}
+        `);
+      }
+    });
+
+    return { restored: ids.length, doc_ids: ids.map(String) };
+  }
+
+  async batchPurge(
+    dto: BatchPurgeDocumentsDto,
+  ): Promise<KnowledgeDocumentBatchPurgeResponse> {
+    const idSet = new Set(dto.doc_ids);
+    const ids = [...idSet].map((id) => BigInt(id));
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: bigint; status: string }>
+    >(Prisma.sql`
+      SELECT id, status FROM oa.kb_document WHERE id IN (${Prisma.join(ids)})
+    `);
+    const foundIds = new Set(rows.map((r) => r.id.toString()));
+    for (const id of ids) {
+      if (!foundIds.has(id.toString())) {
+        throw new NotFoundException('部分知识库文档不存在');
+      }
+    }
+    const toPurge = rows.filter((r) => r.status === 'deleted');
+    const alreadyPurged = rows.filter((r) => r.status === 'purged');
+    const invalid = rows.filter(
+      (r) => r.status !== 'deleted' && r.status !== 'purged',
+    );
+    if (invalid.length > 0) {
+      throw new NotFoundException('部分文档不在回收站中，无法永久删除');
+    }
+    if (toPurge.length === 0) {
+      return { purged: 0, already_purged: alreadyPurged.length };
+    }
+    const toPurgeIds = toPurge.map((r) => r.id);
+
+    // 收集原件对象键（best-effort 删除，失败仅告警，不影响后续）。
+    const originals = await this.prisma.$queryRaw<
+      Array<{ id: bigint; bucket: string | null; object_key: string | null }>
+    >(Prisma.sql`
+      SELECT DISTINCT a.id, a.bucket, a.object_key
+      FROM oa.sys_attachment a
+      WHERE a.deleted_at IS NOT NULL
+        AND a.status = 'soft_deleted'
+        AND (
+          a.id IN (
+            SELECT d.attachment_id FROM oa.kb_document d
+            WHERE d.id IN (${Prisma.join(toPurgeIds)}) AND d.attachment_id IS NOT NULL
+          )
+          OR a.id IN (
+            SELECT s.attachment_id FROM oa.kb_document_source s
+            WHERE s.document_id IN (${Prisma.join(toPurgeIds)}) AND s.attachment_id IS NOT NULL
+          )
+        )
+    `);
+    for (const a of originals) {
+      await this.storage
+        .deleteFile(a.object_key ?? '', a.bucket ?? undefined)
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `永久删除附件 MinIO 对象失败: ${a.object_key}: ${getErrorMessage(error)}`,
+          );
+        });
+    }
+
+    // RAG 侧清理 Milvus chunks + kb_document_image 行 + 派生图片对象（幂等）。
+    // 抛错则不标记 purged，文档留在回收站可重试。
+    await this.rag.batchDeleteDocuments(toPurgeIds.map((id) => id.toString()));
+
+    const attachmentIds = originals.map((a) => a.id);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE oa.kb_document
+        SET status = 'purged', updated_at = NOW()
+        WHERE id IN (${Prisma.join(toPurgeIds)}) AND status = 'deleted'
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE oa.kb_document_source
+        SET status = 'purged', updated_at = NOW()
+        WHERE document_id IN (${Prisma.join(toPurgeIds)}) AND status = 'deleted'
+      `);
+      if (attachmentIds.length > 0) {
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE oa.sys_attachment
+          SET status = 'purged', updated_at = NOW()
+          WHERE id IN (${Prisma.join(attachmentIds)}) AND status = 'soft_deleted'
+        `);
+      }
+    });
+
+    return {
+      purged: toPurgeIds.length,
+      already_purged: alreadyPurged.length,
+    };
+  }
+
+  private async requireActiveDocuments(ids: bigint[]): Promise<void> {
+    if (ids.length === 0) return;
+    const rows = await this.prisma.$queryRaw<Array<{ id: bigint }>>(
+      Prisma.sql`
+        SELECT id FROM oa.kb_document
+        WHERE id IN (${Prisma.join(ids)})
+          AND deleted_at IS NULL
+          AND status = 'active'
+      `,
+    );
+    if (rows.length !== ids.length) {
+      throw new NotFoundException('部分知识库文档不存在或已删除');
+    }
+  }
+
+  private async requireDeletedDocuments(ids: bigint[]): Promise<void> {
+    if (ids.length === 0) return;
+    const rows = await this.prisma.$queryRaw<Array<{ id: bigint }>>(
+      Prisma.sql`
+        SELECT id FROM oa.kb_document
+        WHERE id IN (${Prisma.join(ids)})
+          AND deleted_at IS NOT NULL
+          AND status = 'deleted'
+      `,
+    );
+    if (rows.length !== ids.length) {
+      throw new NotFoundException('部分文档不在回收站中或状态已改变');
+    }
+  }
+
   async assertActiveDocument(docId: bigint): Promise<void> {
     const document = await this.prisma.kb_document.findFirst({
       where: { id: docId, deleted_at: null, status: 'active' },
       select: { id: true },
     });
     if (!document) throw new NotFoundException('知识库文档不存在');
+  }
+
+  private async withDocumentLocks<T>(
+    docIds: bigint[],
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const keys = docIds.map((id) => id.toString());
+    for (const key of keys) {
+      if (this.replacementLocks.has(key)) {
+        throw new ConflictException('部分文档正在执行追加、替换或重建');
+      }
+    }
+    for (const key of keys) {
+      this.replacementLocks.add(key);
+    }
+    try {
+      return await operation();
+    } finally {
+      for (const key of keys) {
+        this.replacementLocks.delete(key);
+      }
+    }
   }
 
   private async withDocumentLock<T>(
@@ -874,6 +1433,7 @@ export class KnowledgeDocumentsService {
       doc_title: string;
       doc_type: string;
       legal_category: string | null;
+      category_id: bigint;
       version_no: string;
       permission_level: string;
       source_department_id: bigint | null;
@@ -888,6 +1448,7 @@ export class KnowledgeDocumentsService {
       doc_title: target.doc_title,
       doc_type: target.doc_type,
       legal_category: target.legal_category,
+      category_id: target.category_id,
       attachment_id: attachmentId,
       content_text: null,
       embedding_status: 'pending',
@@ -910,7 +1471,9 @@ export class KnowledgeDocumentsService {
       SELECT s.id AS source_id, s.document_id, s.attachment_id,
              s.source_title, COALESCE(a.original_file_name, a.file_name) AS file_name,
              a.file_size, s.sort_order, s.is_primary, s.ingest_status,
-             s.chunk_count, s.image_total, s.upload_timings, s.ingest_timings
+             s.chunk_count, s.image_total,
+             COALESCE((s.upload_timings->>'completed_at')::timestamptz, s.created_at) AS uploaded_at,
+             s.upload_timings, s.ingest_timings
       FROM oa.kb_document_source s
       JOIN oa.sys_attachment a ON a.id = s.attachment_id
       WHERE s.document_id = ${docId} AND s.deleted_at IS NULL
@@ -927,7 +1490,9 @@ export class KnowledgeDocumentsService {
       SELECT s.id AS source_id, s.document_id, s.attachment_id,
              s.source_title, COALESCE(a.original_file_name, a.file_name) AS file_name,
              a.file_size, s.sort_order, s.is_primary, s.ingest_status,
-             s.chunk_count, s.image_total, s.upload_timings, s.ingest_timings
+             s.chunk_count, s.image_total,
+             COALESCE((s.upload_timings->>'completed_at')::timestamptz, s.created_at) AS uploaded_at,
+             s.upload_timings, s.ingest_timings
       FROM oa.kb_document_source s
       JOIN oa.sys_attachment a ON a.id = s.attachment_id
       WHERE s.id = ${sourceId} AND s.document_id = ${docId}
@@ -958,6 +1523,7 @@ export class KnowledgeDocumentsService {
       ingest_status: row.ingest_status,
       chunk_count: Number(row.chunk_count),
       image_total: Number(row.image_total),
+      uploaded_at: row.uploaded_at.toISOString(),
       upload_timings: row.upload_timings,
       ingest_timings: row.ingest_timings,
     };
@@ -1023,26 +1589,59 @@ export class KnowledgeDocumentsService {
       attachment_id: bigint;
       title: string;
       category: string | null;
+      category_id: bigint;
+      category_name: string;
+      category_path: string[];
+      category_path_ids: bigint[];
+      category_sensitive: boolean;
       embedding_status: string;
       file_name: string;
       file_size: bigint | null;
       image_total: number | null;
       created_at: Date;
+      last_uploaded_at: Date;
       upload_timings: ProcessingTimings | null;
       ingest_timings: ProcessingTimings | null;
       source_count: bigint;
     };
     const rows = await this.prisma.$queryRaw<Row[]>(Prisma.sql`
+      WITH RECURSIVE category_paths AS (
+        SELECT c.id, c.parent_id, ARRAY[c.category_name]::text[] AS path,
+               ARRAY[c.id]::bigint[] AS path_ids, c.sensitive AS effective_sensitive
+        FROM oa.kb_category c
+        WHERE c.parent_id IS NULL AND c.deleted_at IS NULL
+        UNION ALL
+        SELECT child.id, child.parent_id, parent.path || child.category_name,
+               parent.path_ids || child.id,
+               parent.effective_sensitive OR child.sensitive
+        FROM oa.kb_category child
+        JOIN category_paths parent ON child.parent_id = parent.id
+        WHERE child.deleted_at IS NULL
+      )
       SELECT d.id AS doc_id, a.id AS attachment_id, d.doc_title AS title,
-             d.legal_category AS category, d.embedding_status,
+             array_to_string(cp.path, ' / ') AS category,
+             d.category_id, c.category_name, cp.path AS category_path,
+             cp.path_ids AS category_path_ids,
+             cp.effective_sensitive AS category_sensitive,
+             d.embedding_status,
              COALESCE(a.original_file_name, a.file_name) AS file_name,
              a.file_size, COALESCE(d.image_total, 0) AS image_total,
-             d.created_at, d.upload_timings, d.ingest_timings,
+             d.created_at,
+             COALESCE((SELECT MAX(COALESCE(
+                (s.upload_timings->>'completed_at')::timestamptz,
+                s.created_at
+              ))
+              FROM oa.kb_document_source s
+              WHERE s.document_id = d.id AND s.deleted_at IS NULL
+                AND s.status = 'active'), d.created_at) AS last_uploaded_at,
+             d.upload_timings, d.ingest_timings,
              (SELECT COUNT(*) FROM oa.kb_document_source s
               WHERE s.document_id = d.id AND s.deleted_at IS NULL
                 AND s.status = 'active')::bigint AS source_count
       FROM oa.kb_document d
       JOIN oa.sys_attachment a ON a.id = d.attachment_id
+      JOIN oa.kb_category c ON c.id = d.category_id
+      JOIN category_paths cp ON cp.id = d.category_id
       WHERE d.id = ${docId} AND d.deleted_at IS NULL AND d.status = 'active'
       LIMIT 1
     `);
@@ -1052,12 +1651,18 @@ export class KnowledgeDocumentsService {
       doc_id: row.doc_id.toString(),
       attachment_id: row.attachment_id.toString(),
       title: row.title,
-      category: row.category ?? '未分类',
+      category: row.category ?? row.category_name,
+      category_id: row.category_id.toString(),
+      category_name: row.category_name,
+      category_path: row.category_path,
+      category_path_ids: row.category_path_ids.map(String),
+      category_sensitive: row.category_sensitive,
       embedding_status: row.embedding_status,
       file_name: row.file_name,
       file_size: row.file_size?.toString() ?? null,
       image_total: Number(row.image_total ?? 0),
       created_at: row.created_at.toISOString(),
+      last_uploaded_at: row.last_uploaded_at.toISOString(),
       upload_timings: row.upload_timings,
       ingest_timings: row.ingest_timings,
       source_count: Number(row.source_count),
@@ -1083,19 +1688,40 @@ export class KnowledgeDocumentsService {
     });
   }
 
+  /**
+   * 回收站软删冲突检查：同一 SHA-256 已存在于回收站时，禁止重复上传，
+   * 引导用户先恢复或永久删除。匹配 sys_attachment.status='soft_deleted' 且
+   * 其 kb_document 处于 status='deleted' 的记录（也覆盖作为来源附件被软删的情况）。
+   */
+  private async assertHashNotSoftDeleted(hash: string): Promise<void> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ attachment_id: bigint; doc_id: bigint }>
+    >(Prisma.sql`
+      SELECT a.id AS attachment_id, d.id AS doc_id
+      FROM oa.sys_attachment a
+      LEFT JOIN oa.kb_document d ON d.attachment_id = a.id
+      WHERE a.biz_type = 'knowledge_base'
+        AND a.file_hash = ${hash}
+        AND a.deleted_at IS NOT NULL
+        AND a.status = 'soft_deleted'
+      LIMIT 1
+    `);
+    const hit = rows[0];
+    if (hit) {
+      throw new ConflictException({
+        code: 'SOFT_DELETED_DUPLICATE',
+        message: '该文件已存在于回收站，请先恢复或永久删除后再上传',
+        doc_id: hit.doc_id?.toString() ?? null,
+      });
+    }
+  }
+
   private async asUploadResponse(
     existing: NonNullable<ExistingAttachment>,
     deduplicated: boolean,
   ): Promise<KnowledgeDocumentUploadResponse> {
-    const timings = await this.loadTimings(existing.kb_document[0].id);
     return {
-      document: this.toSummary(
-        existing,
-        existing.kb_document[0],
-        0,
-        timings.upload_timings,
-        timings.ingest_timings,
-      ),
+      document: await this.getSummary(existing.kb_document[0].id),
       deduplicated,
     };
   }
@@ -1140,40 +1766,6 @@ export class KnowledgeDocumentsService {
         `上传耗时写入失败 doc_id=${docId.toString()}: ${getErrorMessage(error)}`,
       );
     }
-  }
-
-  private toSummary(
-    attachment: {
-      id: bigint;
-      original_file_name: string | null;
-      file_name: string;
-      file_size: bigint | null;
-    },
-    document: {
-      id: bigint;
-      doc_title: string;
-      legal_category: string | null;
-      embedding_status: string;
-      created_at: Date;
-    },
-    imageTotal: number,
-    uploadTimings: ProcessingTimings | null,
-    ingestTimings: ProcessingTimings | null,
-  ): KnowledgeDocumentSummary {
-    return {
-      doc_id: document.id.toString(),
-      attachment_id: attachment.id.toString(),
-      title: document.doc_title,
-      category: document.legal_category ?? '未分类',
-      embedding_status: document.embedding_status,
-      file_name: attachment.original_file_name ?? attachment.file_name,
-      file_size: attachment.file_size?.toString() ?? null,
-      image_total: imageTotal,
-      created_at: document.created_at.toISOString(),
-      upload_timings: uploadTimings,
-      ingest_timings: ingestTimings,
-      source_count: 1,
-    };
   }
 }
 
@@ -1342,11 +1934,28 @@ function canonicalMimeType(ext: string): string {
   return [...compatibleMimeTypes(ext)][0] ?? 'application/octet-stream';
 }
 
-function sanitizeObjectFilename(filename: string): string {
+export function sanitizeObjectFilename(filename: string): string {
   const value = filename
     .normalize('NFKC')
     .replace(/[^\p{L}\p{N}._-]+/gu, '_')
-    .replace(/^\.+/, '')
-    .slice(-160);
-  return value || `document${extname(filename).toLowerCase()}`;
+    .replace(/^\.+/, '');
+  const fallback = `document${extname(filename).toLowerCase()}`;
+  return truncateUtf8Filename(value || fallback, 180);
+}
+
+function truncateUtf8Filename(filename: string, maxBytes: number): string {
+  if (Buffer.byteLength(filename, 'utf8') <= maxBytes) return filename;
+  const extension = extname(filename);
+  const extensionBytes = Buffer.byteLength(extension, 'utf8');
+  const stem = extension ? filename.slice(0, -extension.length) : filename;
+  const stemLimit = Math.max(1, maxBytes - extensionBytes);
+  let output = '';
+  let used = 0;
+  for (const character of stem) {
+    const bytes = Buffer.byteLength(character, 'utf8');
+    if (used + bytes > stemLimit) break;
+    output += character;
+    used += bytes;
+  }
+  return `${output || 'document'}${extension}`;
 }

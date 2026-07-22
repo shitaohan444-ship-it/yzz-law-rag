@@ -10,8 +10,10 @@
 import re
 from dataclasses import dataclass
 
-# 递归分隔符层级：段落 → 换行 → 中文句末标点 → 分句标点 → 空格 → 字符
-_SEPARATORS = ["\n\n", "\n", "。", "！", "？", "；", "，", " ", ""]
+# 递归分隔符层级：段落 → 换行 → 中文句末标点 → 分句标点 → 空格。
+# 用尽分隔符后由 _recursive_split 的 not-separators 分支按定长步进兜底（带 overlap）。
+# 切勿把 "" 放进列表：text.split("") 会抛 ValueError: empty separator。
+_SEPARATORS = ["\n\n", "\n", "。", "！", "？", "；", "，", " "]
 
 # 条款号/章节号用数字（中文 + 阿拉伯）
 _NUM = r"一二三四五六七八九十百千零〇两0-9"

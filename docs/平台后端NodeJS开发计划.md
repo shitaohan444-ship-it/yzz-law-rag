@@ -1,7 +1,7 @@
 # 平台后端 NodeJS 开发计划
 
-> 最后更新：2026-07-16
-> 状态：开发中；NestJS/Prisma 骨架、附件、案件材料与 RAG 基础网关已落地
+> 最后更新：2026-07-22
+> 状态：开发中；NestJS/Prisma 骨架、附件、案件材料、RAG 基础网关、公共知识库上传、任意层级分类管理、软删除与回收站已落地
 > 范围：仅覆盖**一体化平台（OA 业务）后端**。知识库 / RAG 后端已独立为 Python 服务（`law-rag-kb/`），见 [RAG开发计划](RAG开发计划.md)。
 
 ## 1. 背景与决策
@@ -11,14 +11,14 @@
 | 维度 | 决策 |
 |---|---|
 | 框架 | NestJS（模块化 / DI / 装饰器，企业级结构化） |
-| ORM | Prisma（schema-first，类型安全，可 introspect 现有 80 表） |
+| ORM | Prisma（schema-first，类型安全，可 introspect 现有 83 表） |
 | 语言 | TypeScript |
 | Python 资产 | `law-rag-service` 保留为**数据库维护工具**（init_db / seed_dict_data / Alembic 迁移），不重写、不废弃 |
 | 数据库迁移管理 | 仍归 Alembic（Python），Node 端**不接手 DDL**，只用 Prisma 映射现有表 |
 | 数据库 / MinIO | 不变，Node 直接连现有 PostgreSQL（`oa` schema）与 MinIO bucket `law-firm-files` |
 | Milvus | 由知识库 Python 服务（`law-rag-kb`）使用，Node 一体化平台**不直连 Milvus** |
 
-**为什么不重写迁移**：Alembic 已有 24 个迁移、467 索引、653 字典项，schema 稳定且 init_db 校验全绿。重写迁移风险高、收益低。Python 留作 DB 工具，Node 专注业务应用层，知识库另起 Python 服务，三者边界清晰。
+**为什么不重写迁移**：Alembic 已有 32 个迁移、485 索引、653 字典项，schema 稳定且 init_db 校验全绿。重写迁移风险高、收益低。Python 留作 DB 工具，Node 专注业务应用层，知识库另起 Python 服务，三者边界清晰。
 
 ## 2. 架构边界
 
@@ -149,7 +149,19 @@ POST   /attachments/:id/bind        # 写 sys_attachment_relation
 
 POST   /api/rag/search              # 代理 FastAPI /search
 POST   /api/rag/chat                # 代理 FastAPI /chat
-
+GET    /api/rag/categories          # 递归分类树（含路径、深度、文档计数）
+POST   /api/rag/categories          # 新增根/子分类
+PATCH  /api/rag/categories/:id      # 改名、别名、移动、排序、归档/敏感/启停
+DELETE /api/rag/categories/:id      # 安全停用（不物理删除）
+GET    /api/rag/documents           # 文档列表，支持 category_id/status/keyword/分页
+PATCH  /api/rag/documents/:id/title # 改标题（只更 PostgreSQL，不重新入库）
+PATCH  /api/rag/documents/:id/category  # 迁移已有文档分类
+POST   /api/rag/documents/batch-move    # 批量改分类（≤100）
+POST   /api/rag/documents/batch-delete  # 纯软删 → 进回收站（保留原件/图片/向量）
+POST   /api/rag/documents/batch-restore # 从回收站恢复（校验原件/图片/向量齐全）
+POST   /api/rag/documents/batch-purge   # 永久删除（清理 MinIO/Milvus/派生图片）
+GET    /api/rag/documents/trash     # 回收站列表（分页/搜索/分类筛选/按删除时间）
+ 
 GET    /cases                       # 案件台账（v_case_management_ledger）
 POST   /cases                       # 建案
 GET    /cases/:id
@@ -157,7 +169,7 @@ PATCH  /cases/:id/status            # 状态流转
 ...（各业务模块类似）
 ```
 
-> 注：`/search`、`/chat`（RAG）仍由独立 Python 服务 `law-rag-kb/` 提供（默认 :8000）；Node 已通过 `/api/rag/search`、`/api/rag/chat` 提供基础代理。当前尚无登录态用户上下文，生产身份注入仍待完成。
+> 注：`/search`、`/chat`（RAG）及知识分类仍由独立 Python 服务 `law-rag-kb/` 提供（默认 :8000）；Node 已通过 `/api/rag/search`、`/api/rag/chat`、`/api/rag/categories` 提供基础代理。当前尚无登录态用户上下文，生产身份注入仍待完成。
 
 ## 7. 知识库 / RAG 边界（独立 Python 服务）
 
@@ -187,6 +199,8 @@ PATCH  /cases/:id/status            # 状态流转
 | 5 | ⏳ | 统计视图 | 9 个 `v_*` 视图的 `$queryRaw` 封装 + 台账 API |
 | 6A | ✅ | RAG 基础网关 | `/api/rag/search`、`/api/rag/chat`、DTO 校验、内部 Token、超时和安全错误映射 |
 | 6C | ✅ | 公共知识库上传 | 文件校验、SHA-256 去重、MinIO/DB 登记、入库/状态/Markdown 代理 |
+| 6D | ✅ | 任意层级分类管理 | 分类树 CRUD、安全移动/停用、同级排序、文档改分类、父级筛选含后代 |
+| 6E | ✅ | 软删除与回收站 | 普通删除纯软删、`batch-purge` 永久清理、`/trash` 列表、`batch-restore` 原子恢复与 `verify-restore`、`file_hash` 软删占用；迁移 `f1a2b3c4d5e6` |
 | 6B | ⏳ | 认证与正式权限 | 登录/JWT、用户上下文、权限守卫和 `X-RAG-User-Id` 注入 |
 
 > RAG 算法服务由独立 Python 项目 `law-rag-kb/` 承担，见 [RAG开发计划](RAG开发计划.md)。平台不重复实现 RAG；阶段 6A 基础代理和 6C 公共上传编排已经完成，阶段 6B 继续补认证和用户权限上下文。
@@ -197,8 +211,8 @@ PATCH  /cases/:id/status            # 状态流转
 - **阶段 2**：Node `AttachmentService` 端到端（上传→写 sys_attachment→下载一致→预签名→relation），与 Python `verify_attachment_service.py` 行为对齐。
 - **阶段 3**：`curl POST /attachments/upload` 走通 HTTP 链路。
 - **阶段 4**：每个业务模块迁移后，对照 Python `tmp_*_flow_test.py` 跑等价 Node 流程测试。
-- **阶段 6A/6C**：RAG 网关覆盖参数校验、字段白名单、上游错误脱敏、上传格式、SHA-256 去重、事务和 MinIO 补偿。2026-07-16 平台总基线为单元 29/29、HTTP E2E 15/15，ESLint 与 build 通过。
-- **全程**：Python `init_db.py` 仍负责 DB 校验（80 表/200 外键/467 索引/145 字典类别/653 项），Node 不碰这些数字。
+- **阶段 6A/6C/6D**：RAG 网关覆盖参数校验、字段白名单、上游错误脱敏、上传格式、SHA-256 去重、事务和 MinIO 补偿；分类接口覆盖同级重名、循环移动、系统分类保护、安全停用和文档迁移。2026-07-17 平台总基线为单元 43/43、HTTP E2E 15/15，ESLint 与 build 通过。
+- **全程**：Python `init_db.py` 仍负责 DB 校验（83 表/207 外键/485 索引/145 字典类别/653 项），Node 不碰这些数字。
 
 ## 10. 风险与待定项
 

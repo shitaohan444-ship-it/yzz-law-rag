@@ -134,7 +134,7 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
 
 ## 快速启动
 
-1. 首次构建并启动 PostgreSQL、MinIO、Milvus、数据库迁移和 RAG API：
+1. 首次构建并启动整套系统（PostgreSQL、MinIO、Milvus、数据库迁移、RAG API、平台 API 和前端）：
 
    ```powershell
    cd D:\law-rag-project
@@ -143,43 +143,30 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
 
    启动前确认根 `.env` 中 `BGE_M3_HOST_PATH` 和 `RERANKER_HOST_PATH` 指向已下载的 ModelScope 模型。迁移容器会自动执行 `alembic upgrade head`，不再需要手工初始化 schema。
 
-2. 日常启动、停止、查看状态和日志：
+2. 日常启动、停止、查看状态和日志（**代码更新后务必加 `--build`**，否则会继续使用旧镜像）：
 
    ```powershell
-   docker compose up -d
+   docker compose up -d --build
    docker compose stop
    docker compose ps
-   docker compose logs -f rag-api
+   docker compose logs -f platform-web platform-api rag-api
    ```
 
-3. 验证 RAG API：
+   > 端口冲突提示：启动前请确保本机没有其它进程占用 `.env` 中配置的 `PLATFORM_WEB_PORT`（默认 5173）、`PLATFORM_API_PORT`（默认 3000）或 `KB_API_PORT`（默认 8000）。如果本地 `pnpm dev` 或旧 preview server 仍在运行，请先停止，或在 `.env` 中把对应端口改为其它值。
+
+3. 验证后端和前端：
 
    ```powershell
    Invoke-RestMethod http://127.0.0.1:8000/ready
    Invoke-RestMethod http://127.0.0.1:8000/health
+   Invoke-WebRequest http://127.0.0.1:5173 -UseBasicParsing
    ```
 
-   `/ready` 只有在 PostgreSQL、MinIO、Milvus和两个本地模型目录全部可用时才返回 200；模型在第一次检索时按需加载。Docker 自动启动 API，但不会自动扫描或入库 pending 文档。
+   `/ready` 只有在 PostgreSQL、MinIO、Milvus和两个本地模型目录全部可用时才返回 200；模型在第一次检索时按需加载。Docker 不会自动扫描或入库 pending 文档。
 
-4. 另行启动一体化平台后端（NodeJS）：
+4. 本机使用 `http://127.0.0.1:5173`；同一局域网的电脑使用 `http://服务器局域网IP:5173`。当前前端仅维护电脑端布局。前端容器只把 `/api` 转发到 Docker 内部的 `platform-api:3000`，浏览器不会直连 FastAPI。局域网只需按需放行 Windows 防火墙 TCP 5173，不要开放 3000、8000、5432、6333 或 9000。
 
-   ```powershell
-   cd D:\law-rag-project\law-platform-api
-   pnpm install
-   pnpm run start:dev
-   ```
-
-5. 启动前端并在本机或局域网访问：
-
-   ```powershell
-   cd D:\law-rag-project\law-platform-web
-   pnpm install
-   pnpm run dev
-   ```
-
-   本机使用 `http://127.0.0.1:5173`；同一局域网的电脑或手机使用 `http://服务器局域网IP:5173`。Vite 只把 `/api` 代理到本机 `law-platform-api:3000`，浏览器不会直连 FastAPI。局域网测试只需按需放行 Windows 防火墙 TCP 5173，不要开放 3000、8000、5432、6333 或 9000。
-
-要在电脑重启后自动恢复容器，请开启 Docker Desktop 的“登录时启动”，并保持各长期服务的 `restart: unless-stopped`。`qwen3.7-plus` 和 `qwen3-vl-plus` 仍由容器通过百炼云端 API 调用，不是在 Docker 内运行的本地模型。
+完成一次 `docker compose up -d --build` 后，开启 Docker Desktop 的“登录时启动”，电脑重启并启动 Docker Desktop 时，所有长期服务会通过 `restart: unless-stopped` 自动恢复，无需再分别运行 `pnpm`。如果曾在 Docker Desktop 中手工停止容器，需要重新执行 `docker compose up -d`。`qwen3.7-plus` 和 `qwen3-vl-plus` 仍由容器通过百炼云端 API 调用，不是在 Docker 内运行的本地模型。
 
 ## 常用访问地址
 
@@ -205,9 +192,21 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
 
 2026-07-16 已完成公共知识库上传第一版及 Chunk/耗时增强：前端支持公开法规、案例和工作资料上传，Node 平台完成 50MB/格式校验、SHA-256 去重、MinIO 原件、数据库事务登记、自动入库、状态/Markdown/Chunk 查询、失败重试、强制重建和分阶段耗时持久化。平台单元 30/30、HTTP E2E 15/15、前端组件 7/7、模拟浏览器 6/6、Python 99 passed + 5 subtests；真实文档 `doc_id=30` 强制重建后仍为 10 个 Chunk，ID 为 `30:m:0000` 至 `30:m:0009`，原问题继续命中文档 30。详见 [公共知识库上传第一版实施报告](docs/公共知识库上传第一版实施报告_2026-07-16.md)。
 
-同日完成公共知识库多源文件追加：顶部上传区只新建独立知识库，入库成功的文档可通过“追加文件”把后续原件加入同一 `doc_id`；原 Chunk 保留，新旧来源共同参与检索与问答。“管理文件”可查看每个来源的 Markdown、Chunk、耗时并单独安全替换；“强制重建”会在所有来源处理成功后一次性替换整份向量数据。Alembic `d8e9f0a1b2c3` 新增 `oa.kb_document_source` 并回填历史主文件。当前基线为平台单元 32/32、HTTP E2E 15/15、前端组件 9/9、模拟浏览器 6/6、Python 102 passed + 5 subtests；真实文档 #38 在同一条目下保持 2 个来源、6 个 Chunk，主文件与追加/替换后的识别词均命中 #38，失败追加不影响旧数据，重建后活动 staging 文档、附件、来源、Milvus Chunk 和 MinIO 对象均为 0。
+同日完成公共知识库多源文件追加：顶部上传区只新建独立知识库，入库成功的文档可通过“追加文件”把后续原件加入同一 `doc_id`；原 Chunk 保留，新旧来源共同参与检索与问答。“管理文件”可查看每个来源的 Markdown、Chunk、耗时并单独安全替换；“强制重建”会在所有来源处理成功后一次性替换整份向量数据。Alembic `d8e9f0a1b2c3` 新增 `oa.kb_document_source` 并回填历史主文件。当前基线为平台单元 40/40、HTTP E2E 15/15、前端组件 14/14、模拟浏览器 6/6、Python 102 passed + 5 subtests；真实文档 #38 在同一条目下保持 2 个来源、6 个 Chunk，主文件与追加/替换后的识别词均命中 #38，失败追加不影响旧数据，重建后活动 staging 文档、附件、来源、Milvus Chunk 和 MinIO 对象均为 0。
 
-知识库管理页随后完成五条分页与独立预览：已登记文档固定每页 5 份；“查看 Markdown”和“查看 Chunk”使用新浏览器标签页打开可复制地址，主卡片默认合并全部来源，文件管理入口自动携带 `source_id`。Chunk 页继续保持每页 20 条，并把来源和页码写入 URL。当前前端组件测试更新为 14/14，桌面/手机模拟浏览器 6/6，真实文档 #38 新标签页验收 2/2；新页面仍只请求 `/api/rag/*`，不会直连 8000、9000 或 19530。
+知识库管理页随后完成可选分页与独立预览：已登记文档默认每页 5 份，可选择 5、10、20、50、100、500 或 1000 份，切换后自动回到第一页；“查看 Markdown”和“查看 Chunk”使用新浏览器标签页打开可复制地址。Chunk 页继续保持每页 20 条，并把来源和页码写入 URL。当前前端组件 14/14、桌面/手机模拟浏览器 6/6、真实文档 #38 新标签页验收 2/2；新页面仍只请求 `/api/rag/*`，不会直连 8000、9000 或 19530。
+
+2026-07-17 完成知识库任意层级分类树与自主分类管理。Alembic `e9f0a1b2c3d4` 新增 `oa.kb_category` 并为 `oa.kb_document.category_id` 建立非空外键；分类支持任意深度的新增、改名、移动、同级排序、安全停用和文档数量统计。分类维护和文档迁移集中在独立的“分类管理”模块；父分类筛选包含所有后代，检索引用会从 PostgreSQL 解析最新分类路径。当前可信局域网版本不再逐份要求可见性确认，包括敏感分类在内的所有入库资料都会自动面向局域网检索。当前基线为平台单元 43/43、HTTP E2E 15/15、前端组件 17/17、桌面/手机模拟浏览器 8/8、Python 104 passed + 5 subtests；真实文档 #35 已迁入“律所工作资料 / 技术部”，原向量不变且检索引用即时显示新路径。
+
+分类管理随后从上传页完全拆分为顶部独立模块，地址为 `/knowledge/categories`。分类页使用“当前层级 / 下一级”双栏和面包屑逐级浏览，一级、二级及更深分类不再混排；已有文档迁移也统一在分类页完成。知识库上传和文档筛选改为一级、二级、三级动态选择框，上传页不再出现新增、编辑或修改分类入口。当前前端组件 17/17、桌面/手机模拟浏览器 8/8、真实分类页面 2/2，平台 43/43、HTTP E2E 15/15、Python 104 passed + 5 subtests；Docker 页面和 SPA 独立路由均已验证。
+
+2026-07-20 完成知识库批量导入、标题修改和最后上传时间：批量模式每次最多选择 20 个文件，浏览器按顺序为每个文件建立独立 `doc_id` 并自动入库，初始标题保留完整文件名；支持暂停、继续、停止后续任务和失败重试。批量结果与已登记文档均可修改标题，检索及问答引用立即使用 PostgreSQL 最新标题且不重新解析、调用 Qwen 或生成向量。文档和源文件分别显示最后上传时间；新建、追加或替换成功时更新，重复文件、标题/分类修改和强制重建不更新。当前回归为平台单元 51/51、前端组件 22/22、桌面/手机模拟浏览器 12/12、Python 107 passed + 5 subtests，三端 lint/build 通过。批量处理仍只经过 `5173/api/rag/*`，没有新增后台任务表或内部端口暴露。
+
+2026-07-20 分类停用展示进一步完善：分类管理将启用分类树与“已停用分类”完整路径列表分开展示，停用项可搜索并按原层级重新启用；知识库单文件、批量导入、分类筛选和文档迁移选择器会显示“已停用，不可选择”的灰色禁用项。停用仍只写入 `status='inactive'`，不物理删除分类；下级分类必须等待上级重新启用后才能恢复。当前平台单元 54/54、前端组件 25/25，桌面/手机模拟浏览器仍为 12/12。
+
+同日修复分类文档数量与管理列表不一致：早期种子文档的附件 `biz_type='document'` 曾被知识库列表过滤，但分类计数和停用校验仍会统计，造成“显示有文档、列表为空且无法停用”。现在以活动 `kb_document` 为知识库归属依据，旧文档也会在分类列表中显示并可移动或删除；停用失败会明确返回剩余数量。真实分类“当事人判决案例”已验证计数和列表均为 2，平台单元测试更新为 56/56。
+
+2026-07-20 完成知识库软删除与独立回收站：普通删除改为纯软删（`kb_document`/`kb_document_source` 置 `deleted`、`sys_attachment` 置 `soft_deleted`，保留原件/图片/向量），新增永久删除 `POST /api/rag/documents/batch-purge`、回收站 `GET /api/rag/documents/trash`、恢复 `POST /api/rag/documents/batch-restore`（经 `verify-restore` 校验齐全后原子恢复）；`file_hash` 唯一索引按 `status` 占用，回收站存在同文件时阻止重复上传；历史硬删文档回填为 `purged`，检索门强制 `active` 且 `deleted_at IS NULL`。前端新增独立路由 `/knowledge/trash`。迁移 `f1a2b3c4d5e6`，当前平台单元 67、Python 115 passed + 5 subtests、前端组件 30、mock e2e 14。详见 [软删除与回收站部署说明](docs/软删除与回收站部署说明_2026-07-20.md)。
 
 2026-07-15 已新增 `law-platform-web` 和平台 RAG 网关：前端 Vitest 4/4、模拟浏览器测试 4/4（桌面 + 手机）、真实 RAG 浏览器测试 3/3；平台单元测试 22/22、HTTP E2E 15/15、Python pytest 93/93 + 5 subtests，前后端 lint 与 build 均通过。真实验收已确认劳动合同法第二十条、民法典第一千二百零二条和无依据拒答。浏览器端构建产物不含内部服务 Token，3000/8000/5432/9000/9001/9091/19530 均限制为本机监听。
 
@@ -286,6 +285,7 @@ model = BGEM3FlagModel(
 ## 相关文档
 
 - [公共知识库上传第一版实施报告](docs/公共知识库上传第一版实施报告_2026-07-16.md)
+- [知识库软删除与回收站部署说明](docs/软删除与回收站部署说明_2026-07-20.md)
 - [简单 RAG 前端与局域网测试报告](docs/简单RAG前端与局域网测试报告_2026-07-15.md)
 - [平台后端NodeJS开发计划](docs/平台后端NodeJS开发计划.md)
 - [RAG开发计划](docs/RAG开发计划.md)

@@ -22,11 +22,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.core.config import settings
 from app.models.oa_views import VIEW_NAMES
 
-EXPECTED_TABLES = 80
+EXPECTED_TABLES = 83
 EXPECTED_VIEWS = 9
 EXPECTED_VIEW_NAMES = list(VIEW_NAMES)
-EXPECTED_FKS = 200
-EXPECTED_INDEXES_MIN = 467
+EXPECTED_FKS = 207
+EXPECTED_INDEXES_MIN = 485
 EXPECTED_DICT_TYPES_MIN = 145
 EXPECTED_DICT_ITEMS_MIN = 653
 

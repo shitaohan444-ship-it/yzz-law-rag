@@ -57,6 +57,8 @@ def build_refs(hits: list[SearchHit]) -> list[dict]:
             "image_id": h.image_id,
             "page_no": h.page_no,
             "image_category": h.image_category,
+            "category_id": h.category_id,
+            "category_path": h.category_path,
             "text": h.text,
         }
         for i, h in enumerate(hits, 1)

@@ -12,6 +12,8 @@ export interface RagHit {
   image_id?: number | null;
   page_no?: number | null;
   image_category?: string | null;
+  category_id?: number | null;
+  category_path?: string[] | null;
 }
 
 export interface SearchResponse {
@@ -32,7 +34,29 @@ export interface ChatResponse {
   hits_count: number;
 }
 
-export type KnowledgeCategory = '法规' | '案例' | '工作资料';
+export interface KnowledgeCategoryNode {
+  id: string;
+  code: string;
+  name: string;
+  aliases: string[];
+  parent_id: string | null;
+  path: string[];
+  path_ids: string[];
+  depth: number;
+  sort_order: number;
+  assignable: boolean;
+  sensitive: boolean;
+  effective_sensitive: boolean;
+  is_system: boolean;
+  status: 'active' | 'inactive';
+  direct_document_count: number;
+  total_document_count: number;
+  children: KnowledgeCategoryNode[];
+}
+
+export interface KnowledgeCategoryTreeResponse {
+  items: KnowledgeCategoryNode[];
+}
 
 export interface ProcessingTimingStage {
   key: string;
@@ -55,11 +79,17 @@ export interface KnowledgeDocument {
   attachment_id: string;
   title: string;
   category: string;
+  category_id: string;
+  category_name: string;
+  category_path: string[];
+  category_path_ids: string[];
+  category_sensitive: boolean;
   embedding_status: string;
   file_name: string;
   file_size: string | null;
   image_total: number;
   created_at: string;
+  last_uploaded_at: string;
   upload_timings: ProcessingTimings | null;
   ingest_timings: ProcessingTimings | null;
   source_count: number;
@@ -88,6 +118,7 @@ export interface KnowledgeDocumentSource {
   ingest_status: string;
   chunk_count: number;
   image_total: number;
+  uploaded_at: string;
   upload_timings: ProcessingTimings | null;
   ingest_timings: ProcessingTimings | null;
 }
@@ -144,6 +175,52 @@ export interface KnowledgeDocumentMarkdown {
   markdown: string;
   source_count: number;
   source_id: number | null;
+}
+
+export interface KnowledgeDocumentBatchMoveResponse {
+  moved: number;
+  category_id: string;
+  category_path: string[];
+}
+
+export interface KnowledgeDocumentBatchDeleteResponse {
+  deleted: number;
+  mode: 'soft';
+  artifacts_retained: true;
+}
+
+export interface TrashDocument {
+  doc_id: string;
+  attachment_id: string;
+  title: string;
+  category_id: string | null;
+  category_name: string | null;
+  category_path: string[] | null;
+  category_path_ids: string[] | null;
+  category_valid: boolean;
+  restorable: boolean;
+  deleted_at: string;
+  file_name: string;
+  file_size: string | null;
+  source_count: number;
+  embedding_status: string;
+}
+
+export interface TrashListResponse {
+  items: TrashDocument[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface KnowledgeDocumentBatchRestoreResponse {
+  restored: number;
+  doc_ids: string[];
+}
+
+export interface KnowledgeDocumentBatchPurgeResponse {
+  purged: number;
+  already_purged: number;
 }
 
 export interface KnowledgeDocumentChunk {

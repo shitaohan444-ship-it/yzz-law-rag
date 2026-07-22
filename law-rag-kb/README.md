@@ -2,9 +2,9 @@
 
 法律 RAG 项目的**知识库 / AI 后端**，基于 Python 构建，负责文档向量化、检索与问答生成。
 
-> 当前进度：**阶段 0–8、统一 Markdown 多模态链路和 RAG 服务端权限/生产安全基线已完成**。PDF/DOCX/TXT/MD/图片先转 Markdown，第一次结构化切片后仅对含图 chunk 调用 `qwen3-vl-plus`，再将有检索价值的描述/OCR回填；文本生成使用 `qwen3.7-plus`。后续重点是平台登录网关联调、旧 DOC、真实图片评估集、异步入库与长稳优化。
+> 当前进度：**阶段 0–8、统一 Markdown 多模态链路、RAG 服务端权限/生产安全基线和知识库软删除与回收站（`/documents/verify-restore`、`/documents/batch-delete`）均已完成**。PDF/DOCX/TXT/MD/图片先转 Markdown，第一次结构化切片后仅对含图 chunk 调用 `qwen3-vl-plus`，再将有检索价值的描述/OCR回填；文本生成使用 `qwen3.7-plus`。已修复 DOCX 图片抽取的命名空间 xpath 崩溃（改 Clark 记法）与 chunker 空分隔符导致的 `text.split("")` 崩溃。后续重点是平台登录网关联调、旧 DOC、真实图片评估集、异步入库与长稳优化。
 
-功能完整验收见 [RAG完整回归测试报告](../docs/RAG完整回归测试报告_2026-07-15.md)；后续安全专项见 [RAG权限与生产安全处理报告](../docs/RAG权限与生产安全处理报告_2026-07-15.md)：当前自动化为 93 passed + 5 subtests，真实生产模式的 401/404、文档隔离、案件拒绝、非 root 容器和启动 fail-closed 均已验证。
+功能完整验收见 [RAG完整回归测试报告](../docs/RAG完整回归测试报告_2026-07-15.md)；后续安全专项见 [RAG权限与生产安全处理报告](../docs/RAG权限与生产安全处理报告_2026-07-15.md)：当前自动化为 115 passed + 5 subtests，真实生产模式的 401/404、文档隔离、案件拒绝、非 root 容器和启动 fail-closed 均已验证。
 
 ## 定位（双后端架构）
 
@@ -75,6 +75,7 @@ law-rag-kb/
 │   │   ├── reranker.py      # FlagReranker 单例 + rerank（bge-reranker-v2-m3）
 │   │   ├── prompt.py        # 法律域 prompt 组装 + knowledge_refs 引用
 │   │   ├── markdown.py      # 稳定图片占位解析、读时预签名与纯文本投影
+│   │   ├── category_resolver.py  # 从 PostgreSQL 批量解析分类路径与敏感标记
 │   │   ├── llm.py           # LLM 抽象层（当前 Qwen3.7 Plus / stub / ollama）
 │   │   └── chat.py          # 问答编排：检索→生成→引用→写 ai_chat_log
 │   └── models/
@@ -119,7 +120,7 @@ X-RAG-User-Id: <authenticated-sys_user-id>
 
 服务 Token 只能由上游网关持有；RAG 会用数据库重新验证用户、员工、有效角色、部门和案件成员关系。`public/internal/department/private/case` 权限均在 Milvus 检索前收窄；未知权限默认拒绝，案件文档不能通过误标 `public` 绕过。容器同时采用非 root、只读根文件系统、无 capabilities 和禁止提权配置。完整矩阵、真实验证和启用清单见 [权限与生产安全处理报告](../docs/RAG权限与生产安全处理报告_2026-07-15.md)。
 
-`/search.hits[].text` 与 `/chat.refs[].text` 均返回完整 Markdown chunk。多源文档使用 `{doc_id}:s:{source_id}:m:{source_chunk_idx}`，metadata保存来源 ID、标题、原文件名和来源内序号；历史单文件 `{doc_id}:m:{idx}` 在下次全来源强制重建时转换。分类只在 metadata，图片通过 chunk 内 `#img:{id}` 建立关系，API 响应阶段才生成预签名 URL。
+`/search.hits[].text` 与 `/chat.refs[].text` 均返回完整 Markdown chunk。多源文档使用 `{doc_id}:s:{source_id}:m:{source_chunk_idx}`，metadata保存来源 ID、标题、原文件名和来源内序号；历史单文件 `{doc_id}:m:{idx}` 在下次全来源强制重建时转换。分类只在 metadata，新 Chunk 保存 `category_id` 与当时的 `category_path` 快照，检索/问答引用阶段通过 `category_resolver.py` 从 PostgreSQL 批量解析最新分类路径；分类改名、移动或文档改分类后无需重建向量。图片通过 chunk 内 `#img:{id}` 建立关系，API 响应阶段才生成预签名 URL。
 
 入库链状态机：`pending → processing → success`（失败 `failed`，不支持文件类型/缺 object_key `skipped`），回写到 `kb_document.embedding_status` 与 `sys_attachment.ai_index_status`。
 
@@ -134,9 +135,9 @@ X-RAG-User-Id: <authenticated-sys_user-id>
 - 当时 CPU 环境 mean 约 5.4s；该数值已被下方当前回归基线替代。
 - 当时 `python -m unittest discover -s tests -v` 为 25 个测试。
 
-## 当前回归基线（2026-07-15）
+## 当前回归基线（2026-07-20）
 
-- 原功能回归为 Python 80/80、在线阶段测试 53/53；权限专项加入后当前为 93 passed + 5 subtests。
+- 原功能回归为 Python 80/80、在线阶段测试 53/53；权限专项加入后为 93 passed + 5 subtests；任意层级分类树与分类元数据解析加入后为 104 passed + 5 subtests；知识库软删除与回收站加入后当前为 115 passed + 5 subtests。
 - 文档级检索 Hit@1/3/5=15/15，法条级 Hit@1/3/5=11/11，两组 MRR 均为 1.000。
 - 顺序基准 15/15：mean=3.126s、P50=2.829s、P95=4.757s。
 - 5 路并发 5/5：wall=17.328s、mean=10.055s；10 路并发 10/10：wall=34.622s、mean=20.979s。

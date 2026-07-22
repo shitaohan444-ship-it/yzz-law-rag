@@ -44,6 +44,10 @@ output/
 # IDE and operating-system files
 .idea/
 .vscode/
+.vs/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Tool caches
+.playwright-cli/

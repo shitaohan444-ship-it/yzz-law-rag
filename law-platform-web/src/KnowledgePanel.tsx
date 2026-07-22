@@ -4,13 +4,20 @@ import {
   appendKnowledgeDocumentSource,
   getKnowledgeDocumentStatus,
   ingestKnowledgeDocument,
+  listKnowledgeCategories,
   listKnowledgeDocuments,
   listKnowledgeDocumentSources,
   replaceKnowledgeDocumentSource,
+  updateKnowledgeDocumentCategory,
+  updateKnowledgeDocumentTitle,
   uploadKnowledgeDocument,
 } from './api';
+import BatchUploadPanel from './BatchUploadPanel';
+import CategoryCascadeSelect from './CategoryCascadeSelect';
+import PageJump from './PageJump';
+import { findCategory, flattenCategories } from './knowledgeCategories';
 import type {
-  KnowledgeCategory,
+  KnowledgeCategoryNode,
   KnowledgeDocument,
   KnowledgeDocumentStatus,
   KnowledgeDocumentSource,
@@ -18,8 +25,8 @@ import type {
 } from './types';
 
 const MAX_BYTES = 50 * 1024 * 1024;
-const DOCUMENT_PAGE_SIZE = 5;
-const categories: KnowledgeCategory[] = ['法规', '案例', '工作资料'];
+const DEFAULT_DOCUMENT_PAGE_SIZE = 5;
+const documentPageSizeOptions = [5, 10, 20, 50, 100, 500, 1000] as const;
 
 const statusLabels: Record<string, string> = {
   pending: '等待入库',
@@ -48,6 +55,17 @@ function sleep(ms: number) {
 function durationLabel(milliseconds: number): string {
   if (milliseconds < 1000) return `${Math.round(milliseconds)} 毫秒`;
   return `${(milliseconds / 1000).toFixed(2)} 秒`;
+}
+
+function dateTimeLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '未知时间';
+  const parts = new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')}:${part('second')}`;
 }
 
 function previewHref(
@@ -89,16 +107,20 @@ function TimingGroup({ title, value }: { title: string; value: ProcessingTimings
 }
 
 export default function KnowledgePanel() {
+  const [uploadMode, setUploadMode] = useState<'single' | 'batch'>('single');
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<KnowledgeCategory>('法规');
+  const [categories, setCategories] = useState<KnowledgeCategoryNode[]>([]);
+  const [categoryId, setCategoryId] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
   const [progressText, setProgressText] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [documentPageSize, setDocumentPageSize] = useState(DEFAULT_DOCUMENT_PAGE_SIZE);
   const [keyword, setKeyword] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -115,28 +137,56 @@ export default function KnowledgePanel() {
   const [replaceSource, setReplaceSource] = useState<KnowledgeDocumentSource | null>(null);
   const [replaceFile, setReplaceFile] = useState<File | null>(null);
   const [replaceTitle, setReplaceTitle] = useState('');
+  const [titleTarget, setTitleTarget] = useState<KnowledgeDocument | null>(null);
+  const [titleValue, setTitleValue] = useState('');
+  const [titleTargetDeduplicated, setTitleTargetDeduplicated] = useState(false);
+  const [titleSaving, setTitleSaving] = useState(false);
+  const [moveTarget, setMoveTarget] = useState<KnowledgeDocument | null>(null);
+  const [moveCategoryId, setMoveCategoryId] = useState('');
+  const titleUpdatedCallback = useRef<((document: KnowledgeDocument) => void) | null>(null);
   const operationStartedAt = useRef<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const replaceFileInput = useRef<HTMLInputElement>(null);
 
-  async function loadDocuments(targetPage = page) {
+  async function loadCategories(preferredId?: string) {
+    const result = await listKnowledgeCategories(true);
+    setCategories(result.items);
+    const flat = flattenCategories(result.items);
+    const isActive = (id: string | undefined) => flat.some((node) => node.id === id && node.status === 'active');
+    const selected = preferredId && isActive(preferredId)
+      ? preferredId
+      : categoryId && isActive(categoryId)
+        ? categoryId
+        : flat.find((node) => node.status === 'active' && node.assignable && !node.is_system)?.id ?? '';
+    setCategoryId(selected);
+    if (categoryId && !isActive(categoryId)) {
+      setNotice('所选分类已停用，请重新选择。');
+    }
+    if (categoryFilter && !isActive(categoryFilter)) {
+      setCategoryFilter('');
+      setNotice('所选分类已停用，请重新选择。');
+    }
+    return result.items;
+  }
+
+  async function loadDocuments(targetPage = page, targetPageSize = documentPageSize) {
     setLoadingList(true);
     setError('');
     try {
       let result = await listKnowledgeDocuments({
         page: targetPage,
-        pageSize: DOCUMENT_PAGE_SIZE,
+        pageSize: targetPageSize,
         keyword,
-        category: categoryFilter,
+        categoryId: categoryFilter,
         status: statusFilter,
       });
-      const lastPage = Math.max(1, Math.ceil(result.total / DOCUMENT_PAGE_SIZE));
+      const lastPage = Math.max(1, Math.ceil(result.total / targetPageSize));
       if (targetPage > lastPage) {
         result = await listKnowledgeDocuments({
           page: lastPage,
-          pageSize: DOCUMENT_PAGE_SIZE,
+          pageSize: targetPageSize,
           keyword,
-          category: categoryFilter,
+          categoryId: categoryFilter,
           status: statusFilter,
         });
       }
@@ -152,11 +202,13 @@ export default function KnowledgePanel() {
 
   useEffect(() => {
     void loadDocuments(1);
+    void loadCategories().catch((loadError: unknown) => setError(messageOf(loadError)));
     // 首次进入管理页加载一次；后续筛选由表单提交触发。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const busy = uploading || Boolean(actionId);
+  const busy = uploading || batchBusy || titleSaving || Boolean(actionId);
+  const moveCategory = findCategory(categories, moveCategoryId);
   useEffect(() => {
     if (!busy) {
       operationStartedAt.current = null;
@@ -221,9 +273,39 @@ export default function KnowledgePanel() {
     }
   }
 
+  function openMove(document: KnowledgeDocument) {
+    setMoveTarget(document);
+    setMoveCategoryId(document.category_id);
+    setError('');
+  }
+
+  async function moveDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!moveTarget || !moveCategory?.assignable || moveCategory.is_system || actionId) return;
+    setActionId(`move-${moveTarget.doc_id}`);
+    setError('');
+    setNotice('');
+    try {
+      const updated = await updateKnowledgeDocumentCategory({
+        docId: moveTarget.doc_id,
+        categoryId: moveCategory.id,
+      });
+      setMoveTarget(null);
+      setDocuments((current) =>
+        current.map((item) => (item.doc_id === updated.doc_id ? updated : item)),
+      );
+      setNotice(`《${updated.title}》已移动到“${updated.category_path.join(' / ')}”；未重新解析、生成向量或调用 Qwen。`);
+    } catch (moveError: unknown) {
+      setError(messageOf(moveError));
+    } finally {
+      setActionId('');
+    }
+  }
+
   async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file || !title.trim() || uploading) return;
+    const uploadCategory = findCategory(categories, categoryId);
+    if (!file || !title.trim() || uploading || !uploadCategory?.assignable || uploadCategory.is_system || uploadCategory.status !== 'active') return;
     if (file.size > MAX_BYTES) {
       setError('文件不能超过 50MB');
       return;
@@ -233,7 +315,11 @@ export default function KnowledgePanel() {
     setNotice('');
     setProgressText('正在上传并登记文档…');
     try {
-      const result = await uploadKnowledgeDocument({ file, title, category });
+      const result = await uploadKnowledgeDocument({
+        file,
+        title,
+        categoryId,
+      });
       setFile(null);
       setTitle('');
       if (fileInput.current) fileInput.current.value = '';
@@ -245,6 +331,9 @@ export default function KnowledgePanel() {
       }
     } catch (uploadError: unknown) {
       setError(messageOf(uploadError));
+      if (uploadError instanceof ApiError && uploadError.status === 400 && uploadError.message.includes('停用')) {
+        await loadCategories();
+      }
     } finally {
       setUploading(false);
       setProgressText('');
@@ -256,6 +345,41 @@ export default function KnowledgePanel() {
     setTitle('');
     setNotice('');
     if (fileInput.current) fileInput.current.value = '';
+  }
+
+  function openTitleEditor(
+    document: KnowledgeDocument,
+    deduplicated = false,
+    onUpdated?: (document: KnowledgeDocument) => void,
+  ) {
+    setTitleTarget(document);
+    setTitleValue(document.title);
+    setTitleTargetDeduplicated(deduplicated);
+    titleUpdatedCallback.current = onUpdated ?? null;
+    setError('');
+  }
+
+  async function handleTitleUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!titleTarget || !titleValue.trim() || titleSaving) return;
+    setTitleSaving(true);
+    setError('');
+    try {
+      const updated = await updateKnowledgeDocumentTitle({
+        docId: titleTarget.doc_id,
+        title: titleValue,
+      });
+      setDocuments((current) => current.map((item) => item.doc_id === updated.doc_id ? updated : item));
+      if (manageTarget?.doc_id === updated.doc_id) setManageTarget(updated);
+      titleUpdatedCallback.current?.(updated);
+      setNotice(`文档 #${updated.doc_id} 标题已修改为《${updated.title}》。`);
+      setTitleTarget(null);
+      titleUpdatedCallback.current = null;
+    } catch (titleError: unknown) {
+      setError(messageOf(titleError));
+    } finally {
+      setTitleSaving(false);
+    }
   }
 
   function openAppend(document: KnowledgeDocument) {
@@ -360,7 +484,9 @@ export default function KnowledgePanel() {
     }
   }
 
-  const pageCount = Math.max(1, Math.ceil(total / DOCUMENT_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / documentPageSize));
+  const selectedCategory = findCategory(categories, categoryId);
+  const selectedFilterCategory = findCategory(categories, categoryFilter);
 
   return (
     <section id="knowledge-panel" role="tabpanel" aria-labelledby="knowledge-tab" className="panel">
@@ -369,63 +495,102 @@ export default function KnowledgePanel() {
           <p className="section-number">03 / INGEST</p>
           <h2>管理公共知识库</h2>
         </div>
-        <p>上传公开法规、公开案例或工作资料。上传成功后会自动解析、切片并写入向量库。</p>
+        <p>上传公开法规、公开案例或工作资料。上传成功后会自动解析、切片并写入向量库，所有入库资料都会自动供当前局域网使用者检索。</p>
       </div>
 
-      <form className="upload-form" onSubmit={handleUpload}>
-        <div className="field-grid">
-          <label>
-            <span>选择文件</span>
-            <input
-              ref={fileInput}
-              aria-label="选择文件"
-              type="file"
-              accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
-              onChange={(event) => {
-                const next = event.target.files?.[0] ?? null;
-                setFile(next);
-                if (next && !title.trim()) setTitle(next.name.replace(/\.[^.]+$/, ''));
-              }}
-            />
-            <small>单个文件不超过 50MB</small>
-          </label>
-          <label>
-            <span>文档标题</span>
-            <input
-              aria-label="文档标题"
-              type="text"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              maxLength={255}
-              placeholder="例如：中华人民共和国劳动合同法"
-            />
-          </label>
-          <label>
-            <span>知识分类</span>
-            <select aria-label="知识分类" value={category} onChange={(event) => setCategory(event.target.value as KnowledgeCategory)}>
-              {categories.map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="upload-actions">
-          <p>{file ? `${file.name} · ${sizeLabel(String(file.size))}` : '支持 PDF、DOCX、TXT、MD 与常见图片'}</p>
-          <div className="upload-button-group">
-            {file && (
-              <>
-                <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}>
-                  重新选择文件
-                </button>
-                <button type="button" disabled={busy} onClick={resetUploadForm}>
-                  清除
-                </button>
-              </>
-            )}
-            <button className="primary-button" type="submit" disabled={!file || !title.trim() || busy}>
-              {uploading ? '正在处理…' : '新建并自动入库'}
-            </button>
+      <div className="upload-mode-switch" role="tablist" aria-label="上传方式">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={uploadMode === 'single'}
+          className={uploadMode === 'single' ? 'is-active' : ''}
+          disabled={busy}
+          onClick={() => setUploadMode('single')}
+        >
+          单文件上传
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={uploadMode === 'batch'}
+          className={uploadMode === 'batch' ? 'is-active' : ''}
+          disabled={busy}
+          onClick={() => setUploadMode('batch')}
+        >
+          批量导入
+        </button>
+      </div>
+
+      {uploadMode === 'single' ? (
+        <form className="upload-form" onSubmit={handleUpload}>
+          <div className="field-grid upload-primary-fields">
+            <label>
+              <span>选择文件</span>
+              <input
+                ref={fileInput}
+                aria-label="选择文件"
+                type="file"
+                accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
+                onChange={(event) => {
+                  const next = event.target.files?.[0] ?? null;
+                  setFile(next);
+                  if (next && !title.trim()) setTitle(next.name.replace(/\.[^.]+$/, ''));
+                }}
+              />
+              <small>单个文件不超过 50MB</small>
+            </label>
+            <label>
+              <span>文档标题</span>
+              <input
+                aria-label="文档标题"
+                type="text"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                maxLength={255}
+                placeholder="例如：中华人民共和国劳动合同法"
+              />
+            </label>
           </div>
-        </div>
-      </form>
+          <CategoryCascadeSelect
+            categories={categories}
+            value={categoryId}
+            onChange={setCategoryId}
+            ariaPrefix="上传"
+            disabled={busy}
+            emptyLabel="请选择一级分类"
+            className="upload-category-cascade"
+          />
+          <div className="upload-actions">
+            <p>{file ? `${file.name} · ${sizeLabel(String(file.size))}` : '支持 PDF、DOCX、TXT、MD 与常见图片'}</p>
+            <div className="upload-button-group">
+              {file && (
+                <>
+                  <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}>
+                    重新选择文件
+                  </button>
+                  <button type="button" disabled={busy} onClick={resetUploadForm}>
+                    清除
+                  </button>
+                </>
+              )}
+              <button className="primary-button" type="submit" disabled={!file || !title.trim() || selectedCategory?.status !== 'active' || !selectedCategory.assignable || selectedCategory.is_system || busy}>
+                {uploading ? '正在处理…' : '新建并自动入库'}
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : (
+        <BatchUploadPanel
+          categories={categories}
+          categoryId={categoryId}
+          onCategoryChange={setCategoryId}
+          disabled={uploading || Boolean(actionId) || titleSaving}
+          onBusyChange={setBatchBusy}
+          onDocumentsChanged={() => loadDocuments(1)}
+          onCategoryInvalid={async () => { await loadCategories(); }}
+          onEditTitle={openTitleEditor}
+        />
+      )}
 
       <div className="response-region" aria-live="polite" aria-busy={uploading || Boolean(actionId)}>
         {progressText && (
@@ -440,20 +605,57 @@ export default function KnowledgePanel() {
       <div className="document-section">
         <div className="results-summary">
           <h3>已登记文档</h3>
-          <span>共 {total} 份</span>
+          <div className="list-summary-controls">
+            <span>共 {total} 份</span>
+            <label>
+              <span>每页显示</span>
+              <select
+                aria-label="已登记文档每页数量"
+                value={documentPageSize}
+                disabled={loadingList}
+                onChange={(event) => {
+                  const nextPageSize = Number(event.target.value);
+                  setDocumentPageSize(nextPageSize);
+                  void loadDocuments(1, nextPageSize);
+                }}
+              >
+                {documentPageSizeOptions.map((value) => (
+                  <option key={value} value={value}>{value} 份</option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
         <form
-          className="filter-bar"
+          className="filter-bar knowledge-filter-bar"
           onSubmit={(event) => {
             event.preventDefault();
-            void loadDocuments(1);
+            void (async () => {
+              try {
+                const latestCategories = await loadCategories();
+                const latestFilter = categoryFilter
+                  ? findCategory(latestCategories, categoryFilter)
+                  : undefined;
+                if (categoryFilter && latestFilter?.status !== 'active') return;
+                await loadDocuments(1);
+              } catch (filterError: unknown) {
+                setError(messageOf(filterError));
+              }
+            })();
           }}
         >
           <input aria-label="按标题筛选" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="按标题搜索" />
-          <select aria-label="按分类筛选" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-            <option value="">全部分类</option>
-            {categories.map((item) => <option key={item}>{item}</option>)}
-          </select>
+          <CategoryCascadeSelect
+            categories={categories}
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+            ariaPrefix="筛选"
+            includeSystem
+            allowEmpty
+            emptyLabel="全部分类"
+            className="filter-category-cascade"
+            showPath={false}
+          />
           <select aria-label="按状态筛选" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="">全部状态</option>
             <option value="pending">等待入库</option>
@@ -462,6 +664,12 @@ export default function KnowledgePanel() {
             <option value="failed">入库失败</option>
           </select>
           <button className="example-button" type="submit">筛选</button>
+          {selectedFilterCategory && (
+            <small className="category-filter-path">
+              当前路径：{selectedFilterCategory.path.join(' / ')}
+              {!selectedFilterCategory.assignable && ' · 请选择可直接归档的下级分类'}
+            </small>
+          )}
         </form>
 
         {loadingList && <div className="loading-card">正在加载文档列表…</div>}
@@ -480,10 +688,11 @@ export default function KnowledgePanel() {
                       <h4>{document.title}</h4>
                       <span className={`status-pill status-${status}`}>{statusLabels[status] ?? status}</span>
                     </div>
-                    <p>{document.category} · {document.file_name} · {sizeLabel(document.file_size)}</p>
+                    <p>{document.category_path?.join(' / ') || document.category} · {document.file_name} · {sizeLabel(document.file_size)}</p>
                     <small>
                       文档 #{document.doc_id} · {document.source_count} 个源文件 · {current ? `${current.chunk_count} 个片段 · ${current.image_total} 张图片` : `${document.image_total} 张图片`}
                     </small>
+                    <small className="upload-time">最后上传：{dateTimeLabel(document.last_uploaded_at)}</small>
                     <details className="timing-details">
                       <summary>处理耗时</summary>
                       <div className="timing-grid">
@@ -494,6 +703,8 @@ export default function KnowledgePanel() {
                   </div>
                   <div className="document-actions">
                     <button type="button" onClick={() => void refreshStatus(document.doc_id)} disabled={Boolean(actionId)}>刷新状态</button>
+                    <button type="button" onClick={() => openTitleEditor(document)} disabled={busy}>修改标题</button>
+                    <button type="button" onClick={() => openMove(document)} disabled={busy}>移动到其他分类</button>
                     {status === 'success' ? (
                       <>
                         <a className="document-action-link" href={previewHref(document.doc_id, 'markdown')} target="_blank" rel="noopener noreferrer">查看 Markdown</a>
@@ -519,8 +730,47 @@ export default function KnowledgePanel() {
           <button type="button" disabled={page <= 1 || loadingList} onClick={() => void loadDocuments(page - 1)}>上一页</button>
           <span>第 {page} / {pageCount} 页</span>
           <button type="button" disabled={page >= pageCount || loadingList} onClick={() => void loadDocuments(page + 1)}>下一页</button>
+          <PageJump pageCount={pageCount} disabled={loadingList} onJump={(target) => void loadDocuments(target)} />
         </div>
       </div>
+
+      {titleTarget && (
+        <div className="replace-modal-backdrop" role="presentation">
+          <section className="replace-modal" role="dialog" aria-modal="true" aria-labelledby="document-title-edit-heading">
+            <div className="results-summary">
+              <div>
+                <p className="section-number">EDIT TITLE</p>
+                <h3 id="document-title-edit-heading">修改文档标题</h3>
+              </div>
+              <button type="button" disabled={titleSaving} onClick={() => setTitleTarget(null)}>关闭</button>
+            </div>
+            {titleTargetDeduplicated && (
+              <p className="replace-safety-note">该文件已存在，修改标题将影响现有知识库文档。</p>
+            )}
+            <p className="muted-copy">只修改页面和检索引用中的标题，不会重新解析文件或生成向量，最后上传时间保持不变。</p>
+            {error && <div className="error-card" role="alert">{error}</div>}
+            <form onSubmit={handleTitleUpdate}>
+              <label>
+                <span>文档标题</span>
+                <input
+                  autoFocus
+                  aria-label="修改后的文档标题"
+                  value={titleValue}
+                  maxLength={255}
+                  disabled={titleSaving}
+                  onChange={(event) => setTitleValue(event.target.value)}
+                />
+              </label>
+              <div className="replace-modal-actions">
+                <button type="button" disabled={titleSaving} onClick={() => setTitleTarget(null)}>取消</button>
+                <button className="primary-button" type="submit" disabled={!titleValue.trim() || titleSaving}>
+                  {titleSaving ? '正在保存…' : '确认修改标题'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       {appendTarget && (
         <div className="replace-modal-backdrop" role="presentation">
@@ -588,6 +838,7 @@ export default function KnowledgePanel() {
                     <h4>{source.source_title} {source.is_primary && <span className="status-pill">主文件</span>}</h4>
                     <p>{source.file_name} · {sizeLabel(source.file_size)}</p>
                     <small>来源 #{source.source_id} · {source.chunk_count} 个 Chunk · {source.image_total} 张图片</small>
+                    <small className="upload-time">上传时间：{dateTimeLabel(source.uploaded_at)}</small>
                     <details className="timing-details">
                       <summary>处理耗时</summary>
                       <div className="timing-grid">
@@ -638,6 +889,36 @@ export default function KnowledgePanel() {
           </section>
         </div>
       )}
+
+      {moveTarget && (
+        <div className="replace-modal-backdrop" role="presentation">
+          <section className="replace-modal" role="dialog" aria-modal="true" aria-labelledby="move-document-title">
+            <div className="results-summary">
+              <div>
+                <p className="section-number">MOVE DOCUMENT</p>
+                <h3 id="move-document-title">移动《{moveTarget.title}》</h3>
+              </div>
+              <button type="button" disabled={Boolean(actionId)} onClick={() => setMoveTarget(null)}>关闭</button>
+            </div>
+            <p className="replace-safety-note">只更新数据库分类，不重新解析、不生成向量，也不会调用 Qwen。</p>
+            {error && <div className="error-card" role="alert">{error}</div>}
+            <form onSubmit={moveDocument}>
+              <CategoryCascadeSelect
+                categories={categories}
+                value={moveCategoryId}
+                onChange={setMoveCategoryId}
+                ariaPrefix="目标"
+                emptyLabel="请选择一级分类"
+              />
+              <div className="replace-modal-actions">
+                <button type="button" disabled={Boolean(actionId)} onClick={() => setMoveTarget(null)}>取消</button>
+                <button className="primary-button" type="submit" disabled={!moveCategory?.assignable || moveCategory.is_system || Boolean(actionId)}>{actionId ? '正在保存…' : '确认移动分类'}</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
     </section>
   );
 }

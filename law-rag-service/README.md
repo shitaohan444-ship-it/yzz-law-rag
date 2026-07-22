@@ -8,10 +8,10 @@
 
 ## 当前状态
 
-- 数据库 schema 已落地并校验通过：**80 张源表 / 9 个统计视图 / 200 外键 / 467 索引 / 145 字典类别 / 653 字典项 / 1653 总字段**
-- Alembic 迁移链 head = `d5e7a3b9c1f2`（含 v2.16 设计修复 + v2.17 业务字段闭环 + MinIO 附件字段）
+- 数据库 schema 已落地并校验通过：**83 张源表 / 9 个统计视图 / 207 外键 / 485 索引 / 145 字典类别 / 653 字典项 / 1735 总字段**（含视图字段；源表 1588）
+- Alembic 迁移链 head = `e9f0a1b2c3d4`（含 v2.16 设计修复、v2.17 业务字段闭环、MinIO 附件字段、`d8e9f0a1b2c3` 多源文件表、以及 `e9f0a1b2c3d4` 任意层级知识分类树）
 - `app/models/`（SQLAlchemy 模型）作为 Node 侧 Prisma schema 的参照源
-- `app/services/attachment_service.py` 已闭环（MinIO + sys_attachment），Node 侧将对照重写
+- `app/services/attachment_service.py` 已闭环（MinIO + sys_attachment），Node 侧已对照重写
 - 字典种子由 `seed_dict_data.py` 从 Excel 灌入
 
 ## OA 数据库初始化
@@ -24,10 +24,10 @@ cd D:\law-rag-project\law-rag-service
 执行：Alembic 迁移 → 字典种子 → 校验。校验输出：
 
 ```text
-[PASS] tables: 80
+[PASS] tables: 83
 [PASS] views: 9
-[PASS] foreign keys: 200
-[PASS] indexes: 467
+[PASS] foreign keys: 207
+[PASS] indexes: 485
 [PASS] dict types: 145
 [PASS] dict items: 653
 ```
@@ -123,4 +123,11 @@ law-rag-service/data/
 
 完成后通知 Node 侧跑 `prisma db pull` 同步 `law-platform-api/prisma/schema.prisma`。
 
-当前知识库迁移链已包含 `kb_document.description_summary` 与 `kb_document.body_markdown`（head `a1b2c3d4e5f6`），并补齐 `kb_document_image` 逐图审计模型。统一 Markdown 管线只在数据库保存稳定 `#img:{id}`，预签名 URL 由 `law-rag-kb` 读取接口现场生成。
+当前知识库迁移链已包含：
+
+- `kb_document.description_summary` 与 `kb_document.body_markdown`（head `a1b2c3d4e5f6`）
+- `kb_document_image` 逐图审计模型（head `9a7e4c2d6f10`）
+- `kb_document_source` 多源文件/追加/替换支持（head `d8e9f0a1b2c3`）
+- `kb_category` 任意层级分类树与 `kb_document.category_id` 非空外键（head `e9f0a1b2c3d4`）
+
+统一 Markdown 管线只在数据库保存稳定 `#img:{id}`，预签名 URL 由 `law-rag-kb` 读取接口现场生成。分类改名或移动不重建向量，检索与问答引用从 PostgreSQL 解析最新 `category_path`。

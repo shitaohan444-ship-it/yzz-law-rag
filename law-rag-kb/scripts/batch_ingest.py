@@ -31,12 +31,12 @@ from app.models.tables import kb_document, sys_attachment  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent / "test_files"
 
-# 子目录 → legal_category / doc_type
+# 子目录 → 兼容显示名、数据库分类编码
 CATEGORY_MAP = {
-    "法律法规": "法规",
-    "判决案例": "案例",
-    "案件材料": "案件材料",
-    "工作资料": "工作资料",
+    "法律法规": ("法律", "legal_law"),
+    "判决案例": ("当事人判决案例", "client_judgment"),
+    "案件材料": ("待分类", "uncategorized"),
+    "工作资料": ("待分类", "uncategorized"),
 }
 SUPPORTED_EXT = {
     ".pdf", ".docx", ".txt", ".md",
@@ -91,7 +91,7 @@ def main() -> None:
 
 
 def _ingest_one(sub: Path, f: Path, emp: int, *, force: bool) -> dict:
-    category = CATEGORY_MAP[sub.name]
+    category, category_code = CATEGORY_MAP[sub.name]
     ext = f.suffix.lower()
     object_key = f"kb-batch/{sub.name}/{f.name}"
     rec: dict = {
@@ -118,7 +118,9 @@ def _ingest_one(sub: Path, f: Path, emp: int, *, force: bool) -> dict:
     # 2. 幂等建/查 sys_attachment + kb_document
     now = datetime.now(timezone.utc)
     try:
-        doc_id = _ensure_records(object_key, f, ext, mime, len(data), category, emp, now)
+        doc_id = _ensure_records(
+            object_key, f, ext, mime, len(data), category, category_code, emp, now
+        )
     except Exception as e:
         rec["msg"] = f"ensure records: {e}"[:120]
         return rec
@@ -136,7 +138,15 @@ def _ingest_one(sub: Path, f: Path, emp: int, *, force: bool) -> dict:
 
 
 def _ensure_records(
-    object_key: str, f: Path, ext: str, mime: str, size: int, category: str, emp: int, now
+    object_key: str,
+    f: Path,
+    ext: str,
+    mime: str,
+    size: int,
+    category: str,
+    category_code: str,
+    emp: int,
+    now,
 ) -> int:
     """幂等：按 object_key 查 attachment / kb_document，缺则补建，返回 doc_id。"""
     with SessionLocal() as db:
@@ -187,17 +197,27 @@ def _ensure_records(
                 text(
                     """
                     INSERT INTO oa.kb_document
-                      (doc_title, doc_type, legal_category, attachment_id, content_text,
+                      (doc_title, doc_type, legal_category, category_id,
+                       attachment_id, content_text,
                        embedding_status, version_no, permission_level,
                        created_at, created_by, updated_at, updated_by, status)
                     VALUES
-                      (:title, :cat, :cat, :att, NULL,
+                      (:title, :cat, :cat,
+                       (SELECT id FROM oa.kb_category WHERE category_code = :category_code),
+                       :att, NULL,
                        'pending', 'v1', 'public',
                        :now, :emp, :now, :emp, 'active')
                     RETURNING id
                     """
                 ),
-                {"title": f.stem, "cat": category, "att": att_id, "now": now, "emp": emp},
+                {
+                    "title": f.stem,
+                    "cat": category,
+                    "category_code": category_code,
+                    "att": att_id,
+                    "now": now,
+                    "emp": emp,
+                },
             ).scalar()
             created = True
 

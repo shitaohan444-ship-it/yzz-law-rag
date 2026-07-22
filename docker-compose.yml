@@ -1,6 +1,6 @@
 # 律所 RAG 项目统一基础设施编排（唯一入口）
 #
-# 包含：PostgreSQL、MinIO（业务 + Milvus 共用同一实例）、etcd、Milvus standalone、数据库迁移和 RAG API。
+# 包含：PostgreSQL、MinIO、etcd、Milvus、数据库迁移、RAG API、平台 API 和前端。
 # 历史上业务 MinIO 与 Milvus 内部 MinIO 是两套实例，现已合并：
 # Milvus 通过 service 名 `minio` 直连业务 MinIO，各用各的 bucket（业务 law-firm-files / Milvus 默认 bucket）。
 #
@@ -121,6 +121,7 @@ services:
     build:
       context: ./law-rag-kb
       dockerfile: Dockerfile
+    pull_policy: build
     container_name: law-rag-kb
     restart: unless-stopped
     init: true
@@ -192,6 +193,66 @@ services:
       timeout: 10s
       retries: 10
       start_period: 60s
+
+  platform-api:
+    build:
+      context: ./law-platform-api
+      dockerfile: Dockerfile
+    pull_policy: build
+    container_name: law-platform-api
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: law-firm-files
+      MINIO_USE_SSL: "false"
+      RAG_API_BASE_URL: http://rag-api:8000
+      RAG_API_TIMEOUT_MS: 120000
+      RAG_INGEST_TIMEOUT_MS: 900000
+      RAG_SERVICE_TOKEN: ${RAG_SERVICE_TOKEN:-}
+    ports:
+      - "127.0.0.1:${PLATFORM_API_PORT:-3000}:3000"
+    networks:
+      - law-rag-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      rag-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/rag/documents?page=1&page_size=1').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  platform-web:
+    build:
+      context: ./law-platform-web
+      dockerfile: Dockerfile
+    pull_policy: build
+    container_name: law-platform-web
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:${PLATFORM_WEB_PORT:-5173}:8080"
+    networks:
+      - law-rag-net
+    depends_on:
+      platform-api:
+        condition: service_healthy
 
 networks:
   law-rag-net:
