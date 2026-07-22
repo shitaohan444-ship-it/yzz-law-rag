@@ -1,7 +1,7 @@
 # RAG 开发计划（知识库 Python 服务）
 
-> 最后更新：2026-07-15
-> 状态：阶段 0–8 核心链路、多模态 VL、RAG 服务端权限与生产安全基线已完成。平台登录网关联调、旧 DOC、异步化和大规模人工评估继续推进。
+> 最后更新：2026-07-22
+> 状态：阶段 0–8 核心链路、多模态 VL、RAG 服务端权限与生产安全基线、知识库任意层级分类与分类元数据解析、软删除与回收站（`verify-restore`/`batch-delete`）已完成。平台登录网关联调、旧 DOC、异步化和大规模人工评估继续推进。
 > 关联：[平台后端NodeJS开发计划](平台后端NodeJS开发计划.md)（一体化平台）、[数据库设计](数据库设计.md)、[MinIO对象规则](MinIO对象规则.md)
 
 ## 1. 背景与定位
@@ -45,7 +45,8 @@ law-rag-kb/
 │   │   ├── reranker.py      # bge-reranker-v2-m3
 │   │   ├── prompt.py        # 法律域 prompt + 引用编号
 │   │   ├── llm.py           # Stub / OpenAI 兼容 / Ollama 抽象层
-│   │   └── chat.py          # 检索 → 生成 → 引用 → 日志
+│   │   ├── chat.py          # 检索 → 生成 → 引用 → 日志
+│   │   └── category_resolver.py  # 从 PostgreSQL 批量解析分类路径与敏感标记
 │   ├── ingest/              # 有序解析、Markdown 构建/两次整形、VL、Embedding、入库编排
 │   └── models/              # 知识库表 SQLAlchemy 模型（或复用 law-rag-service 的）
 ├── requirements.txt
@@ -57,12 +58,20 @@ law-rag-kb/
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| GET | `/health` | 三连健康检查（PG/MinIO/Milvus） |
+| GET | `/ready` | 容器就绪，额外校验本地模型目录与鉴权配置 |
 | POST | `/search` | 自然语言检索，返回相关片段 + 来源（文档/页码/条款） |
 | POST | `/chat` | RAG 问答，检索 + LLM 生成，带引用 |
-| POST | `/documents/{doc_id}/ingest` | 按 `kb_document` 触发统一 Markdown 转换、draft 切片、含图块 VL、回填与向量化 |
-| GET | `/documents/{id}` | 查询文档入库状态、切片数等 |
+| POST | `/documents/{doc_id}/ingest` | 按 `kb_document` 触发统一 Markdown 转换、draft 切片、含图块 VL、回填与向量化；可选 `force`/`generate_description`/`analyze_images` |
+| GET | `/documents/{id}` | 查询文档入库状态、Milvus 实时切片数 |
 | GET | `/documents/{id}/markdown` | 读取最终 `body_markdown`，请求时解析稳定图片占位符 |
-| GET | `/health` | 健康检查 |
+| GET | `/documents/{id}/chunks` | 分页查询切片（不含向量），可选 `source_id` |
+| POST | `/documents/{staging_id}/promote` | 把隐藏 staging 文档提升到目标 `doc_id` |
+| POST | `/documents/{staging_id}/promote-source` | 从 staging 向目标文档追加/替换来源 |
+| POST | `/documents/rebuild-sources` | 全部来源成功后原子替换目标文档整份切片 |
+| POST | `/documents/batch-delete` | 永久清理已删文档的 Milvus 切片、`kb_document_image` 与 MinIO 对象（幂等） |
+| POST | `/documents/verify-restore` | 恢复前校验派生制品（Milvus 切片 + 派生图片）是否齐全 |
+| DELETE | `/documents/{staging_id}/staging` | 替换失败后清理残留 staging 文档、切片与对象 |
 
 ## 4. 数据流与存储设计
 
@@ -74,6 +83,7 @@ law-rag-kb/
 
 复用并扩展知识库表：
 - `kb_document` —— 文档登记、案件/卷宗通用关联、文本/VL 入库状态、图片统计、`description_summary` 与最终 `body_markdown`
+- `kb_category` —— 任意层级知识分类树；`parent_id` 递归表达层级，保存稳定编码、别名、排序、归档/敏感/系统内置/启停状态
 - `kb_document_image` —— 逐图哈希、页码、派生对象、分类、描述、筛选和模型审计
 - `ai_chat_log` / `ai_analysis_record` / `ai_analysis_review` —— 问答日志与分析结果
 - `ai_transcription_record` —— 录音转写（如有）
@@ -87,11 +97,11 @@ collection 设计（`kb_chunks`，已落地，见 `app/core/milvus_client.py`）
 | `id` | VARCHAR(128) PK | 统一 Markdown chunk：`{doc_id}:m:{idx}` |
 | `doc_id` | INT64 | 关联 `kb_document.id`（hybrid_search `expr` 过滤用） |
 | `chunk_idx` | INT16 | 文档内切片序号（稳定，参与 PK） |
-| `source` | VARCHAR(100) | legal_category（法规/案例/案件材料/工作资料） |
+| `source` | VARCHAR(100) | `legal_category` 兼容字段；新链路使用 `meta.category_id` 与数据库解析的 `category_path` |
 | `chunk_text` | VARCHAR(65535) | 最终 Markdown chunk；图片使用稳定 `#img:{id}`，不保存预签名 URL |
 | `dense` | FLOAT_VECTOR(1024) | BGE-M3 dense |
 | `sparse` | SPARSE_FLOAT_VECTOR | BGE-M3 sparse |
-| `meta` | JSON | `content_type=markdown`、条款/章节、页码、图片ID/分类、案件/卷宗及权限元数据 |
+| `meta` | JSON | `content_type=markdown`、条款/章节、页码、图片ID、分类（`category_id`、`category_path` 快照）、案件/卷宗及权限元数据 |
 
 索引：`dense` 用 HNSW(M=16, efConstruction=200)+COSINE；`sparse` 用 SPARSE_INVERTED_INDEX+IP；`hybrid_search` 融合（默认 RRFRanker(k=60) / WeightedRanker 可配）。
 
@@ -141,7 +151,7 @@ MinIO 原件 → PDF/DOCX/TXT/MD/图片转初始 Markdown → draft 结构化切
 | 4 | 生成链 | ✅ 纯函数编排 retrieve→prompt→LLM→引用→`ai_chat_log`；当前已从 Stub 切换为阿里云百炼 `qwen3.7-plus`，Stub/Ollama 保留作开发回退 |
 | 5 | 批量入库 | 批量 ingest `test_files/` 法律文档，`ai_chat_log` 记录问答 ✅（`scripts/batch_ingest.py` 按 object_key 幂等；7 文档 19 chunk 入库；多文档检索精准命中劳动合同法/判决书/实务笔记；`/chat` 累积写 `ai_chat_log`）|
 | 6 | 核心调优 | ✅ 法条独立切片与 `article_no/chapter`；chapter 仅由“章”赋值；`rerank_min_score`；RRF/weighted 可配置；文档级 15/15、法条级 11/11；顺序与 1/5/10 路性能脚本 |
-| 7 | 生产化 | 🚧 `qwen3.7-plus`、引用/拒答、脱敏 502、检索计时、CPU 分批、服务认证、文档/案件授权、容器加固和生产 fail-closed 已完成；平台登录代理、旧 DOC、扩大生成评估集、异步入库、集中监控、长稳及 GPU/MPS 评估待续 |
+| 7 | 生产化 | 🚧 `qwen3.7-plus`、引用/拒答、脱敏 502、检索计时、CPU 分批、服务认证、文档/案件授权、容器加固、生产 fail-closed、分类元数据/路径解析、软删除 `verify-restore`/`batch-delete`、ingest 的 `generate_description`/`analyze_images` 开关、DOCX Clark 记法解析修复与 chunker 空分隔符崩溃修复均已完成；平台登录代理、异步入库、集中监控与长稳压测、GPU/MPS 评估等生产化与规模化尾巴待续，详见 §10 |
 | 8 | 多模态 VL | ✅ `qwen3-vl-plus`；统一 Markdown 转换与 draft 切片后 VL；分类进 metadata、描述/OCR回填；`:m:` chunk、`body_markdown`、读时预签名；80/80 单元测试、53/53 链路回归，10 张真实图片 VL success |
 
 ## 8. 环境与启动
@@ -167,3 +177,15 @@ uvicorn app.main:app --reload --port 8000
 | hybrid 融合 | RRF / weighted 配比 | ✅ 默认 RRFRanker(k=60)；代码支持 WeightedRanker 与 dense/sparse 权重配置，扩大评估集后继续对比 |
 | reranker 实现 | FlagReranker / sentence-transformers CrossEncoder | ✅ 阶段 3 已定 FlagReranker（复用 FlagEmbedding 1.2.10，避免与 transformers 4.44.2 冲突） |
 | 入库触发 | 平台主动调用 / 知识库定时扫描 | ✅ 阶段 2 同步 `POST /documents/{id}/ingest`；阶段 5 `scripts/batch_ingest.py` 批量脚本（按 object_key 幂等，子目录映射 legal_category）；定时扫描留阶段 6+ |
+
+## 10. 后续工作（Roadmap）
+
+阶段 0–8 核心链路已完成并验收通过，以下为生产化与规模化阶段的待办（按优先级）：
+
+- **平台登录网关与用户身份注入**（最高优先，上生产的卡点）：Node 完成登录/JWT 与权限守卫后，向 RAG 注入内部服务 Token 和已认证用户 ID，再启用生产鉴权（RAG 服务端权限层已就绪，当前为可信局域网无登录验收模式）。
+- **异步入库**：将同步 `POST /documents/{id}/ingest` 升级为持久化异步任务（队列 + 进度 + 失败重试/告警），避免长文档或批量上传阻塞请求。
+- **旧 `.doc`（OLE）解析**：现仅支持 DOCX，补充对遗留二进制 `.doc` 的转换/解析路径。
+- **OCR 专项**：扫描件纯图目前依赖 VL，补独立 OCR 管线以提升识别稳定性与成本可控性。
+- **集中监控与高并发长稳压测**：补齐检索/入库耗时、命中率、模型加载、Milvus 与上游 LLM 的集中指标与告警；在并发与长稳场景下压测并回归基线。
+- **GPU/MPS 评估**：当前 BGE-M3 / reranker 为 CPU 推理，评估迁移到 GPU 或 Apple Silicon MPS 后的吞吐与稳定性，并在 Mac 上重测 sparse vector。
+- **扩大人工生成评估集**：扩充忠实度 / 引用准确率 / 拒答的评估集，持续回归。
