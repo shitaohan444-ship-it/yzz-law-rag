@@ -15,6 +15,7 @@ import {
   RagIngestResponse,
   RagSearchResponse,
   RagSourcePromotionResponse,
+  RagVerifyRestoreResponse,
 } from './rag.types';
 
 type JsonRecord = Record<string, unknown>;
@@ -58,12 +59,15 @@ export class RagService {
   async ingestDocument(
     docId: string,
     force: boolean,
+    options?: { generateDescription?: boolean; analyzeImages?: boolean },
   ): Promise<RagIngestResponse> {
     const timeoutMs = Number(
       this.config.get<number>('RAG_INGEST_TIMEOUT_MS') ?? 900000,
     );
     const payload = await this.request(
-      `/documents/${encodeURIComponent(docId)}/ingest?force=${force}`,
+      `/documents/${encodeURIComponent(docId)}/ingest?force=${force}` +
+        `${options?.generateDescription === undefined ? '' : `&generate_description=${options.generateDescription}`}` +
+        `${options?.analyzeImages === undefined ? '' : `&analyze_images=${options.analyzeImages}`}`,
       'POST',
       undefined,
       timeoutMs,
@@ -187,6 +191,38 @@ export class RagService {
     );
   }
 
+  async batchDeleteDocuments(docIds: string[]): Promise<void> {
+    await this.request('/documents/batch-delete', 'POST', {
+      doc_ids: docIds.map((id) => Number(id)),
+    });
+  }
+
+  async verifyRestoreDocuments(
+    docIds: string[],
+  ): Promise<RagVerifyRestoreResponse> {
+    const payload = await this.request('/documents/verify-restore', 'POST', {
+      doc_ids: docIds.map((id) => Number(id)),
+    });
+    if (
+      !this.isRecord(payload) ||
+      !Array.isArray(payload.items) ||
+      !payload.items.every(
+        (item) =>
+          this.isRecord(item) &&
+          typeof item.doc_id === 'number' &&
+          typeof item.ok === 'boolean' &&
+          typeof item.missing_chunks === 'number' &&
+          Array.isArray(item.missing_images),
+      )
+    ) {
+      throw new BadGatewayException({
+        code: 'RAG_INVALID_RESPONSE',
+        message: '知识库返回了无法识别的恢复校验结果',
+      });
+    }
+    return payload as unknown as RagVerifyRestoreResponse;
+  }
+
   async getDocumentStatus(docId: string): Promise<RagDocumentStatus> {
     const payload = await this.request(
       `/documents/${encodeURIComponent(docId)}`,
@@ -272,49 +308,63 @@ export class RagService {
       timeoutOverride ??
       Number(this.config.get<number>('RAG_API_TIMEOUT_MS') ?? 120000);
     const serviceToken = this.config.get<string>('RAG_SERVICE_TOKEN')?.trim();
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    try {
-      const response = await fetch(`${baseUrl}${path}`, {
-        method,
-        headers: {
-          ...(body !== undefined && { 'Content-Type': 'application/json' }),
-          ...(serviceToken && { Authorization: `Bearer ${serviceToken}` }),
-        },
-        ...(body !== undefined && { body: JSON.stringify(body) }),
-        signal: controller.signal,
-      });
-
-      let payload: unknown;
+    // 知识库服务偶发连接重置（uvicorn 默认 keep-alive 5s 与本端连接池不匹配等），
+    // 对连接层错误自动重试，避免单次抖动中断批量入库等长流程。
+    // ingest 在 force=false 下幂等，重试安全；超时(abort)与业务异常(HttpException)不重试。
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        payload = JSON.parse(await response.text()) as unknown;
-      } catch {
-        throw new BadGatewayException({
-          code: 'RAG_INVALID_RESPONSE',
-          message: '知识库返回了无效响应',
+        const response = await fetch(`${baseUrl}${path}`, {
+          method,
+          headers: {
+            ...(body !== undefined && { 'Content-Type': 'application/json' }),
+            ...(serviceToken && { Authorization: `Bearer ${serviceToken}` }),
+          },
+          ...(body !== undefined && { body: JSON.stringify(body) }),
+          signal: controller.signal,
         });
-      }
 
-      if (!response.ok) {
-        this.throwUpstreamError(response.status);
-      }
-      return payload;
-    } catch (error: unknown) {
-      if (error instanceof HttpException) throw error;
-      if (controller.signal.aborted) {
-        throw new GatewayTimeoutException({
-          code: 'RAG_TIMEOUT',
-          message: '知识库处理超时，请稍后重试',
+        let payload: unknown;
+        try {
+          payload = JSON.parse(await response.text()) as unknown;
+        } catch {
+          throw new BadGatewayException({
+            code: 'RAG_INVALID_RESPONSE',
+            message: '知识库返回了无效响应',
+          });
+        }
+
+        if (!response.ok) {
+          this.throwUpstreamError(response.status);
+        }
+        return payload;
+      } catch (error: unknown) {
+        if (error instanceof HttpException) throw error;
+        if (controller.signal.aborted) {
+          throw new GatewayTimeoutException({
+            code: 'RAG_TIMEOUT',
+            message: '知识库处理超时，请稍后重试',
+          });
+        }
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+          continue;
+        }
+        throw new BadGatewayException({
+          code: 'RAG_UNAVAILABLE',
+          message: '暂时无法连接知识库服务',
         });
+      } finally {
+        clearTimeout(timeout);
       }
-      throw new BadGatewayException({
-        code: 'RAG_UNAVAILABLE',
-        message: '暂时无法连接知识库服务',
-      });
-    } finally {
-      clearTimeout(timeout);
     }
+    throw new BadGatewayException({
+      code: 'RAG_UNAVAILABLE',
+      message: '暂时无法连接知识库服务',
+    });
   }
 
   private throwUpstreamError(status: number): never {

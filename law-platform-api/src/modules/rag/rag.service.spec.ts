@@ -103,17 +103,31 @@ describe('RagService', () => {
     } satisfies Partial<HttpException>);
   });
 
-  it('maps connection failures and invalid JSON to 502', async () => {
-    fetchSpy.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+  it('retries transient connection errors then maps to 502 when exhausted', async () => {
+    fetchSpy.mockRejectedValue(new Error('ECONNREFUSED'));
     await expect(service.search({ query: 'x' })).rejects.toBeInstanceOf(
       BadGatewayException,
     );
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
 
+  it('recovers when a retried connection succeeds on a later attempt', async () => {
+    fetchSpy
+      .mockRejectedValueOnce(new Error('ECONNRESET'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(searchPayload), { status: 200 }),
+      );
+    await expect(service.search({ query: 'x' })).resolves.toBeDefined();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps invalid JSON to 502 without retrying', async () => {
     fetchSpy.mockResolvedValueOnce(new Response('not-json', { status: 200 }));
     await expect(service.search({ query: 'x' })).rejects.toMatchObject({
       status: 502,
       response: { code: 'RAG_INVALID_RESPONSE' },
     });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it('maps aborted requests to 504', async () => {
@@ -161,6 +175,24 @@ describe('RagService', () => {
         method: 'POST',
         headers: { Authorization: 'Bearer internal-only' },
       }),
+    );
+  });
+
+  it('forwards switches that disable paid ingestion stages for one job', async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({ doc_id: 42, status: 'success', chunk_count: 3 }),
+        { status: 200 },
+      ),
+    );
+
+    await service.ingestDocument('42', false, {
+      generateDescription: false,
+      analyzeImages: false,
+    });
+
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      'http://127.0.0.1:8000/documents/42/ingest?force=false&generate_description=false&analyze_images=false',
     );
   });
 

@@ -1229,11 +1229,38 @@ model fin_refund_record {
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model kb_category {
+  id                   BigInt        @id @default(autoincrement())
+  category_code        String        @unique(map: "uk_kb_category_code") @db.VarChar(80)
+  category_name        String        @db.VarChar(120)
+  aliases              Json          @db.JsonB
+  parent_id            BigInt?
+  sort_order           Int
+  assignable           Boolean
+  sensitive            Boolean
+  is_system             Boolean
+  created_at           DateTime      @db.Timestamptz(6)
+  created_by           BigInt?
+  updated_at           DateTime      @db.Timestamptz(6)
+  updated_by           BigInt?
+  deleted_at           DateTime?     @db.Timestamptz(6)
+  status               String        @db.VarChar(32)
+  remark               String?       @db.VarChar(500)
+  parent               kb_category?  @relation("kb_category_tree", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kb_category_parent")
+  children             kb_category[] @relation("kb_category_tree")
+  kb_document          kb_document[]
+
+  @@index([parent_id, sort_order, id], map: "ix_kb_category_parent_order")
+  @@index([status], map: "ix_kb_category_active")
+  @@schema("oa")
+}
+
 model kb_document {
   id                   BigInt          @id @default(autoincrement())
   doc_title            String          @db.VarChar(255)
   doc_type             String          @db.VarChar(80)
   legal_category       String?         @db.VarChar(100)
+  category_id          BigInt
   source_department_id BigInt?
   author_employee_id   BigInt?
   attachment_id        BigInt?
@@ -1251,10 +1278,12 @@ model kb_document {
   sys_attachment       sys_attachment? @relation(fields: [attachment_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kb_document_attachment")
   sys_employee         sys_employee?   @relation(fields: [author_employee_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kb_document_author")
   sys_department       sys_department? @relation(fields: [source_department_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kb_document_department")
+  kb_category          kb_category      @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kb_document_category")
 
   @@index([attachment_id], map: "idx_kb_document_attachment_id")
   @@index([author_employee_id], map: "idx_kb_document_author_employee_id")
   @@index([created_at], map: "idx_kb_document_created_at")
+  @@index([category_id], map: "ix_kb_document_category_id")
   @@index([source_department_id], map: "idx_kb_document_source_department_id")
   @@schema("oa")
 }

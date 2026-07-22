@@ -2,9 +2,11 @@ import { BadRequestException } from '@nestjs/common';
 import { MinioService } from '../../core/minio/minio.service';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { RagService } from '../rag/rag.service';
+import { KnowledgeCategoriesService } from './knowledge-categories.service';
 import {
   KnowledgeDocumentsService,
   normalizeFilename,
+  sanitizeObjectFilename,
   validateKnowledgeFile,
 } from './knowledge-documents.service';
 
@@ -28,6 +30,34 @@ function uploadFile(
   };
 }
 
+function categoryService(): KnowledgeCategoriesService {
+  return {
+    requireAssignable: jest.fn().mockResolvedValue({
+      id: BigInt(2),
+      name: '法律',
+      path: ['法律法规', '法律'],
+      pathIds: [BigInt(1), BigInt(2)],
+      effectiveSensitive: false,
+    }),
+  } as unknown as KnowledgeCategoriesService;
+}
+
+function categorySummary(row: Record<string, unknown>) {
+  return {
+    category_id: BigInt(2),
+    category_name: '法律',
+    category_path: ['法律法规', '法律'],
+    category_path_ids: [BigInt(1), BigInt(2)],
+    category_sensitive: false,
+    source_count: BigInt(1),
+    image_total: 0,
+    last_uploaded_at: new Date('2026-07-16T00:00:00Z'),
+    upload_timings: null,
+    ingest_timings: null,
+    ...row,
+  };
+}
+
 describe('KnowledgeDocumentsService', () => {
   const existingAttachment = {
     id: BigInt(8),
@@ -41,6 +71,7 @@ describe('KnowledgeDocumentsService', () => {
         legal_category: '法规',
         embedding_status: 'success',
         created_at: new Date('2026-07-16T00:00:00Z'),
+        category_id: BigInt(2),
       },
     ],
   };
@@ -70,19 +101,39 @@ describe('KnowledgeDocumentsService', () => {
     expect(normalizeFilename('å³å¨æ³.md')).toBe('劳动法.md');
   });
 
+  it('limits MinIO filename components by UTF-8 bytes and keeps the extension', () => {
+    const safe = sanitizeObjectFilename(
+      `${'最高人民检察院超长文件名'.repeat(30)}.docx`,
+    );
+
+    expect(Buffer.byteLength(safe, 'utf8')).toBeLessThanOrEqual(180);
+    expect(safe).toMatch(/\.docx$/);
+  });
+
   it('reuses an exact-content document without uploading or vectorizing again', async () => {
     const prisma = {
       sys_attachment: {
         findFirst: jest.fn().mockResolvedValue(existingAttachment),
       },
-      $queryRaw: jest
-        .fn()
-        .mockResolvedValue([{ upload_timings: null, ingest_timings: null }]),
+      $queryRaw: jest.fn().mockResolvedValue([
+        categorySummary({
+          doc_id: BigInt(12),
+          attachment_id: BigInt(8),
+          title: '中华人民共和国劳动合同法',
+          category: '法律法规 / 法律',
+          embedding_status: 'success',
+          file_name: '劳动合同法.md',
+          file_size: BigInt(128),
+          created_at: new Date('2026-07-16T00:00:00Z'),
+        }),
+      ]),
     };
     const storage = { uploadFile: jest.fn() };
     const service = new KnowledgeDocumentsService(
       prisma as unknown as PrismaService,
       storage as unknown as MinioService,
+      {} as RagService,
+      categoryService(),
     );
 
     await expect(
@@ -90,7 +141,7 @@ describe('KnowledgeDocumentsService', () => {
         uploadFile('劳动合同法.md', '# 劳动合同法', 'text/markdown'),
         {
           title: '重复标题不会覆盖原文档',
-          category: '法规',
+          category_id: '2',
         },
       ),
     ).resolves.toMatchObject({
@@ -125,26 +176,44 @@ describe('KnowledgeDocumentsService', () => {
         callback(tx),
       ),
       $executeRaw: jest.fn().mockResolvedValue(1),
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValue([
+          categorySummary({
+            doc_id: BigInt(31),
+            attachment_id: BigInt(21),
+            title: '新法规',
+            category: '法律法规 / 法律',
+            embedding_status: 'pending',
+            file_name: '新法规.md',
+            file_size: BigInt(15),
+            created_at: new Date('2026-07-16T00:00:00Z'),
+          }),
+        ]),
     };
     const storage = {
+      fileExists: jest.fn().mockResolvedValue(false),
       uploadFile: jest.fn().mockResolvedValue({
         bucket: 'law-firm-files',
         objectKey: 'key',
         etag: 'etag',
         size: 15,
       }),
-      deleteFile: jest.fn(),
+      deleteFile: jest.fn().mockResolvedValue(undefined),
     };
     const service = new KnowledgeDocumentsService(
       prisma as unknown as PrismaService,
       storage as unknown as MinioService,
+      {} as RagService,
+      categoryService(),
     );
 
     await expect(
       service.create(uploadFile('新法规.md', '# 新法规内容', 'text/markdown'), {
         title: '新法规',
-        category: '法规',
+        category_id: '2',
       }),
     ).resolves.toMatchObject({
       deduplicated: false,
@@ -187,6 +256,7 @@ describe('KnowledgeDocumentsService', () => {
         .mockRejectedValue(new Error('database unavailable')),
     };
     const storage = {
+      fileExists: jest.fn().mockResolvedValue(false),
       uploadFile: jest.fn().mockResolvedValue({
         bucket: 'law-firm-files',
         objectKey: 'key',
@@ -198,16 +268,20 @@ describe('KnowledgeDocumentsService', () => {
     const service = new KnowledgeDocumentsService(
       prisma as unknown as PrismaService,
       storage as unknown as MinioService,
+      {} as RagService,
+      categoryService(),
     );
 
     await expect(
-      service.create(uploadFile('失败.md', '# 内容', 'text/markdown'), {
+      service.create(uploadFile('failed.md', '# 内容', 'text/markdown'), {
         title: '失败文档',
-        category: '工作资料',
+        category_id: '2',
       }),
     ).rejects.toThrow('database unavailable');
     expect(storage.deleteFile).toHaveBeenCalledWith(
-      expect.stringContaining('knowledge-base/'),
+      expect.stringMatching(
+        /^knowledge-base\/\d{4}\/\d{2}\/[0-9a-f]{2}\/[0-9a-f]{64}_[0-9a-f]{8}_failed\.md$/,
+      ),
       'law-firm-files',
     );
   });
@@ -218,6 +292,7 @@ describe('KnowledgeDocumentsService', () => {
       doc_title: '原标题',
       doc_type: '案例',
       legal_category: '案例',
+      category_id: BigInt(2),
       embedding_status: 'success',
       version_no: 'v1',
       permission_level: 'public',
@@ -237,7 +312,7 @@ describe('KnowledgeDocumentsService', () => {
       sys_attachment: { create: jest.fn().mockResolvedValue(attachment) },
       kb_document: { create: jest.fn().mockResolvedValue(stagingDocument) },
     };
-    const summaryRow = {
+    const summaryRow = categorySummary({
       doc_id: BigInt(30),
       attachment_id: BigInt(101),
       title: '新标题',
@@ -247,9 +322,7 @@ describe('KnowledgeDocumentsService', () => {
       file_size: BigInt(20),
       image_total: 0,
       created_at: new Date('2026-07-16T00:00:00Z'),
-      upload_timings: null,
-      ingest_timings: null,
-    };
+    });
     const prisma = {
       kb_document: { findFirst: jest.fn().mockResolvedValue(current) },
       sys_attachment: { findFirst: jest.fn().mockResolvedValue(null) },
@@ -257,7 +330,10 @@ describe('KnowledgeDocumentsService', () => {
         callback(tx),
       ),
       $executeRaw: jest.fn().mockResolvedValue(1),
-      $queryRaw: jest.fn().mockResolvedValue([summaryRow]),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValue([summaryRow]),
     };
     const storage = {
       uploadFile: jest.fn().mockResolvedValue({
@@ -277,13 +353,14 @@ describe('KnowledgeDocumentsService', () => {
       prisma as unknown as PrismaService,
       storage as unknown as MinioService,
       rag as unknown as RagService,
+      categoryService(),
     );
 
     await expect(
       service.replace(
         BigInt(30),
         uploadFile('新版.md', '# 新版本内容', 'text/markdown'),
-        { title: '新标题', category: '法规' },
+        { title: '新标题', category_id: '2' },
       ),
     ).resolves.toMatchObject({
       replaced: true,
@@ -313,6 +390,7 @@ describe('KnowledgeDocumentsService', () => {
       doc_title: '多源知识库',
       doc_type: '工作资料',
       legal_category: '工作资料',
+      category_id: BigInt(2),
       embedding_status: 'success',
       version_no: 'v1',
       permission_level: 'public',
@@ -347,12 +425,13 @@ describe('KnowledgeDocumentsService', () => {
       image_total: 0,
       image_kept: 0,
       image_filtered: 0,
+      uploaded_at: new Date('2026-07-16T01:00:00Z'),
       file_name: '后续.md',
       file_size: BigInt(20),
       upload_timings: null,
       ingest_timings: null,
     };
-    const summaryRow = {
+    const summaryRow = categorySummary({
       doc_id: BigInt(30),
       attachment_id: BigInt(91),
       title: '多源知识库',
@@ -363,9 +442,7 @@ describe('KnowledgeDocumentsService', () => {
       source_count: BigInt(2),
       image_total: 0,
       created_at: new Date('2026-07-16T00:00:00Z'),
-      upload_timings: null,
-      ingest_timings: null,
-    };
+    });
     const prisma = {
       kb_document: { findFirst: jest.fn().mockResolvedValue(current) },
       $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
@@ -374,6 +451,7 @@ describe('KnowledgeDocumentsService', () => {
       $executeRaw: jest.fn().mockResolvedValue(1),
       $queryRaw: jest
         .fn()
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([sourceRow])
         .mockResolvedValueOnce([summaryRow]),
@@ -396,6 +474,7 @@ describe('KnowledgeDocumentsService', () => {
       prisma as unknown as PrismaService,
       storage as unknown as MinioService,
       rag as unknown as RagService,
+      categoryService(),
     );
 
     await expect(
@@ -419,5 +498,468 @@ describe('KnowledgeDocumentsService', () => {
     );
     expect(rag.cleanupStagingDocument).not.toHaveBeenCalled();
     expect(storage.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('batch moves active documents to another category in one update', async () => {
+    const prisma = {
+      $executeRaw: jest.fn().mockResolvedValue(2),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: BigInt(10) }, { id: BigInt(11) }]),
+    };
+    const storage = { deleteFile: jest.fn() };
+    const rag = { batchDeleteDocuments: jest.fn() };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      storage as unknown as MinioService,
+      rag as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(
+      service.batchMove({ doc_ids: ['10', '11'], category_id: '2' }),
+    ).resolves.toEqual({
+      moved: 2,
+      category_id: '2',
+      category_path: ['法律法规', '法律'],
+    });
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(rag.batchDeleteDocuments).not.toHaveBeenCalled();
+    expect(storage.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('updates only the document title and preserves the last upload time', async () => {
+    const lastUploadedAt = new Date('2026-07-16T06:30:00Z');
+    const prisma = {
+      kb_document: {
+        findFirst: jest.fn().mockResolvedValue({ id: BigInt(30) }),
+      },
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest.fn().mockResolvedValue([
+        categorySummary({
+          doc_id: BigInt(30),
+          attachment_id: BigInt(91),
+          title: '修改后的标题',
+          category: '法律法规 / 法律',
+          embedding_status: 'success',
+          file_name: '原文件.md',
+          file_size: BigInt(20),
+          created_at: new Date('2026-07-16T00:00:00Z'),
+          last_uploaded_at: lastUploadedAt,
+        }),
+      ]),
+    };
+    const rag = {
+      ingestDocument: jest.fn(),
+      promoteSource: jest.fn(),
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      {} as MinioService,
+      rag as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(
+      service.updateTitle(BigInt(30), { title: '修改后的标题' }),
+    ).resolves.toMatchObject({
+      doc_id: '30',
+      title: '修改后的标题',
+      last_uploaded_at: lastUploadedAt.toISOString(),
+    });
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(rag.ingestDocument).not.toHaveBeenCalled();
+    expect(rag.promoteSource).not.toHaveBeenCalled();
+  });
+
+  it('returns source upload time and document last upload time', async () => {
+    const sourceUploadedAt = new Date('2026-07-16T08:30:15Z');
+    const documentUploadedAt = new Date('2026-07-16T09:45:00Z');
+    const prisma = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            source_id: BigInt(81),
+            document_id: BigInt(24),
+            attachment_id: BigInt(56),
+            source_title: 'test.md',
+            file_name: 'test.md',
+            file_size: BigInt(18),
+            sort_order: 0,
+            is_primary: true,
+            ingest_status: 'success',
+            chunk_count: 1,
+            image_total: 0,
+            uploaded_at: sourceUploadedAt,
+            upload_timings: null,
+            ingest_timings: null,
+          },
+        ])
+        .mockResolvedValueOnce([
+          categorySummary({
+            doc_id: BigInt(24),
+            attachment_id: BigInt(56),
+            title: '测试法规',
+            category: '法律法规 / 法律',
+            embedding_status: 'success',
+            file_name: 'test.md',
+            file_size: BigInt(18),
+            created_at: new Date('2026-07-16T00:00:00Z'),
+            last_uploaded_at: documentUploadedAt,
+          }),
+        ])
+        .mockResolvedValueOnce([{ total: BigInt(1) }]),
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      {} as MinioService,
+      {} as RagService,
+      categoryService(),
+    );
+
+    await expect(service.listSources(BigInt(24))).resolves.toMatchObject({
+      items: [{ uploaded_at: sourceUploadedAt.toISOString() }],
+    });
+    await expect(
+      service.list({ page: 1, page_size: 5 }),
+    ).resolves.toMatchObject({
+      items: [{ last_uploaded_at: documentUploadedAt.toISOString() }],
+    });
+  });
+
+  it('lists legacy knowledge documents without filtering by attachment biz_type', async () => {
+    const statements: string[] = [];
+    const queryRaw = jest.fn((query: { strings: readonly string[] }) => {
+      const statement = query.strings.join(' ');
+      statements.push(statement);
+      return Promise.resolve(
+        statement.includes('COUNT(*)::bigint AS total')
+          ? [{ total: BigInt(0) }]
+          : [],
+      );
+    });
+    const prisma = { $queryRaw: queryRaw };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      {} as MinioService,
+      {} as RagService,
+      categoryService(),
+    );
+
+    await expect(
+      service.list({ page: 1, page_size: 5, category_id: '4' }),
+    ).resolves.toMatchObject({ items: [], total: 0 });
+    expect(statements.join(' ')).not.toContain("a.biz_type = 'knowledge_base'");
+  });
+
+  it('batch soft-deletes active documents without touching MinIO or RAG', async () => {
+    const tx = { $executeRaw: jest.fn().mockResolvedValue(1) };
+    const prisma = {
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
+        callback(tx),
+      ),
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: BigInt(10) }, { id: BigInt(11) }])
+        .mockResolvedValueOnce([
+          {
+            id: BigInt(20),
+            bucket: 'law-firm-files',
+            object_key: 'doc/10/file',
+          },
+          {
+            id: BigInt(21),
+            bucket: 'law-firm-files',
+            object_key: 'doc/11/file',
+          },
+        ]),
+    };
+    const storage = { deleteFile: jest.fn().mockResolvedValue(undefined) };
+    const rag = {
+      batchDeleteDocuments: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      storage as unknown as MinioService,
+      rag as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(
+      service.batchDelete({ doc_ids: ['10', '11'] }),
+    ).resolves.toEqual({
+      deleted: 2,
+      mode: 'soft',
+      artifacts_retained: true,
+    });
+    // 纯软删除：三张表状态翻转（kb_document、kb_document_source、sys_attachment）
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(3);
+    // 不删除 MinIO 原件，也不调用 RAG 清理 —— 原件/图片/向量全部保留以便恢复
+    expect(storage.deleteFile).not.toHaveBeenCalled();
+    expect(rag.batchDeleteDocuments).not.toHaveBeenCalled();
+  });
+
+  it('batch delete rejects when any document is missing or inactive', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: BigInt(10) }]),
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      {} as MinioService,
+      {} as RagService,
+      categoryService(),
+    );
+
+    await expect(
+      service.batchDelete({ doc_ids: ['10', '11'] }),
+    ).rejects.toThrow('部分知识库文档不存在或已删除');
+  });
+
+  it('create rejects with SOFT_DELETED_DUPLICATE when hash is in the trash', async () => {
+    const prisma = {
+      sys_attachment: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([]) // findSourceByHash: 无活动来源
+        .mockResolvedValueOnce([
+          { attachment_id: BigInt(20), doc_id: BigInt(30) },
+        ]), // assertHashNotSoftDeleted: 回收站命中
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      { fileExists: jest.fn() } as unknown as MinioService,
+      {} as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(
+      service.create(uploadFile('a.md', '# 测试文档', 'text/markdown'), {
+        category_id: '2',
+        title: '测试文档',
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'SOFT_DELETED_DUPLICATE' },
+    });
+  });
+
+  it('listTrash paginates soft-deleted docs and resolves category_valid', async () => {
+    const prisma = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            doc_id: BigInt(30),
+            attachment_id: BigInt(20),
+            title: '已删除文档',
+            category_id: BigInt(2),
+            category_name: '法律',
+            category_path: ['法律法规', '法律'],
+            category_path_ids: [BigInt(1), BigInt(2)],
+            category_valid: true,
+            deleted_at: new Date('2026-07-19T00:00:00Z'),
+            embedding_status: 'success',
+            file_name: 'a.md',
+            file_size: BigInt(128),
+            source_count: BigInt(1),
+          },
+        ])
+        .mockResolvedValueOnce([{ total: BigInt(1) }]),
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      {} as unknown as MinioService,
+      {} as unknown as RagService,
+      categoryService(),
+    );
+
+    const result = await service.listTrash({
+      page: 1,
+      page_size: 20,
+      sort: 'deleted_at',
+      order: 'desc',
+    });
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      doc_id: '30',
+      category_valid: true,
+      restorable: true,
+      file_size: '128',
+      source_count: 1,
+    });
+  });
+
+  it('batchRestore restores docs when originals and RAG artifacts are intact', async () => {
+    const tx = { $executeRaw: jest.fn().mockResolvedValue(1) };
+    const prisma = {
+      $transaction: jest.fn((cb: (c: typeof tx) => unknown) => cb(tx)),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: BigInt(10) }]) // requireDeletedDocuments
+        .mockResolvedValueOnce([{ id: BigInt(10), category_valid: true }]) // 分类有效性
+        .mockResolvedValueOnce([
+          { id: BigInt(20), bucket: 'law-firm-files', object_key: 'kb/10/f' },
+        ]), // 原件
+    };
+    const storage = { fileExists: jest.fn().mockResolvedValue(true) };
+    const rag = {
+      verifyRestoreDocuments: jest.fn().mockResolvedValue({
+        items: [
+          { doc_id: 10, ok: true, missing_chunks: 0, missing_images: [] },
+        ],
+      }),
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      storage as unknown as MinioService,
+      rag as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(service.batchRestore({ doc_ids: ['10'] })).resolves.toEqual({
+      restored: 1,
+      doc_ids: ['10'],
+    });
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(3);
+  });
+
+  it('batchRestore rejects with RESTORE_ORIGINAL_MISSING and writes nothing', async () => {
+    const tx = { $executeRaw: jest.fn() };
+    const prisma = {
+      $transaction: jest.fn((cb: (c: typeof tx) => unknown) => cb(tx)),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: BigInt(10) }])
+        .mockResolvedValueOnce([{ id: BigInt(10), category_valid: true }])
+        .mockResolvedValueOnce([
+          { id: BigInt(20), bucket: 'law-firm-files', object_key: 'kb/10/f' },
+        ]),
+    };
+    const storage = { fileExists: jest.fn().mockResolvedValue(false) };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      storage as unknown as MinioService,
+      {} as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(
+      service.batchRestore({ doc_ids: ['10'] }),
+    ).rejects.toMatchObject({ response: { code: 'RESTORE_ORIGINAL_MISSING' } });
+    expect(tx.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it('batchRestore rejects with RESTORE_ARTIFACTS_MISSING when vectors/images gone', async () => {
+    const tx = { $executeRaw: jest.fn() };
+    const prisma = {
+      $transaction: jest.fn((cb: (c: typeof tx) => unknown) => cb(tx)),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: BigInt(10) }])
+        .mockResolvedValueOnce([{ id: BigInt(10), category_valid: true }])
+        .mockResolvedValueOnce([
+          { id: BigInt(20), bucket: 'law-firm-files', object_key: 'kb/10/f' },
+        ]),
+    };
+    const storage = { fileExists: jest.fn().mockResolvedValue(true) };
+    const rag = {
+      verifyRestoreDocuments: jest.fn().mockResolvedValue({
+        items: [
+          { doc_id: 10, ok: false, missing_chunks: 1, missing_images: [] },
+        ],
+      }),
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      storage as unknown as MinioService,
+      rag as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(
+      service.batchRestore({ doc_ids: ['10'] }),
+    ).rejects.toMatchObject({
+      response: { code: 'RESTORE_ARTIFACTS_MISSING' },
+    });
+    expect(tx.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it('batchRestore rejects with RESTORE_CATEGORY_INVALID when category lapsed and no override', async () => {
+    const prisma = {
+      $transaction: jest.fn(),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: BigInt(10) }])
+        .mockResolvedValueOnce([{ id: BigInt(10), category_valid: false }]),
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      {} as unknown as MinioService,
+      {} as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(
+      service.batchRestore({ doc_ids: ['10'] }),
+    ).rejects.toMatchObject({ response: { code: 'RESTORE_CATEGORY_INVALID' } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('batchPurge purges deleted docs via RAG and marks them purged', async () => {
+    const tx = { $executeRaw: jest.fn().mockResolvedValue(1) };
+    const prisma = {
+      $transaction: jest.fn((cb: (c: typeof tx) => unknown) => cb(tx)),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: BigInt(10), status: 'deleted' }])
+        .mockResolvedValueOnce([
+          { id: BigInt(20), bucket: 'law-firm-files', object_key: 'kb/10/f' },
+        ]),
+    };
+    const storage = { deleteFile: jest.fn().mockResolvedValue(undefined) };
+    const rag = {
+      batchDeleteDocuments: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      storage as unknown as MinioService,
+      rag as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(service.batchPurge({ doc_ids: ['10'] })).resolves.toEqual({
+      purged: 1,
+      already_purged: 0,
+    });
+    expect(rag.batchDeleteDocuments).toHaveBeenCalledWith(['10']);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(3);
+  });
+
+  it('batchPurge is idempotent for already-purged docs', async () => {
+    const tx = { $executeRaw: jest.fn() };
+    const prisma = {
+      $transaction: jest.fn((cb: (c: typeof tx) => unknown) => cb(tx)),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: BigInt(10), status: 'purged' }]),
+    };
+    const rag = { batchDeleteDocuments: jest.fn() };
+    const service = new KnowledgeDocumentsService(
+      prisma as unknown as PrismaService,
+      {} as unknown as MinioService,
+      rag as unknown as RagService,
+      categoryService(),
+    );
+
+    await expect(service.batchPurge({ doc_ids: ['10'] })).resolves.toEqual({
+      purged: 0,
+      already_purged: 1,
+    });
+    expect(rag.batchDeleteDocuments).not.toHaveBeenCalled();
+    expect(tx.$executeRaw).not.toHaveBeenCalled();
   });
 });

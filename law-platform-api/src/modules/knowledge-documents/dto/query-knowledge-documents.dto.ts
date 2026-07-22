@@ -7,9 +7,8 @@ import {
   Max,
   MaxLength,
   Min,
+  Matches,
 } from 'class-validator';
-import { KNOWLEDGE_CATEGORIES } from './create-knowledge-document.dto';
-import type { KnowledgeCategory } from './create-knowledge-document.dto';
 
 export class QueryKnowledgeDocumentsDto {
   @Type(() => Number)
@@ -24,8 +23,8 @@ export class QueryKnowledgeDocumentsDto {
   page_size = 20;
 
   @IsOptional()
-  @IsIn(KNOWLEDGE_CATEGORIES)
-  category?: KnowledgeCategory;
+  @Matches(/^[1-9]\d*$/)
+  category_id?: string;
 
   @IsOptional()
   @IsIn(['pending', 'processing', 'success', 'failed', 'skipped'])
