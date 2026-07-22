@@ -7,6 +7,7 @@ import {
   getKnowledgeDocumentMarkdown,
   listKnowledgeDocumentSources,
 } from './api';
+import PageJump from './PageJump';
 import type {
   KnowledgeDocumentChunk,
   KnowledgeDocumentChunks,
@@ -279,6 +280,7 @@ export function ChunkPreviewPage() {
             <button type="button" disabled={requestedPage <= 1} onClick={() => updateLocation(sourceId, requestedPage - 1)}>上一页</button>
             <span>第 {requestedPage} / {pageCount} 页</span>
             <button type="button" disabled={requestedPage >= pageCount} onClick={() => updateLocation(sourceId, requestedPage + 1)}>下一页</button>
+            <PageJump pageCount={pageCount} disabled={loading} onJump={(target) => updateLocation(sourceId, target)} />
           </div>
         )}
       </section>

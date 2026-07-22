@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ApiError, chatRag, searchRag } from './api';
+import AppNavigation from './AppNavigation';
 import { createSessionId } from './session';
 import KnowledgePanel from './KnowledgePanel';
 import type { ChatResponse, RagHit, SearchResponse } from './types';
@@ -94,41 +95,7 @@ export default function App() {
       </header>
 
       <main className="workspace">
-        <div className="tabs" role="tablist" aria-label="RAG 功能">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'search'}
-            aria-controls="search-panel"
-            id="search-tab"
-            onClick={() => setActiveTab('search')}
-          >
-            法条检索
-            <small>查看原文片段</small>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'chat'}
-            aria-controls="chat-panel"
-            id="chat-tab"
-            onClick={() => setActiveTab('chat')}
-          >
-            知识问答
-            <small>生成带引用回答</small>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'knowledge'}
-            aria-controls="knowledge-panel"
-            id="knowledge-tab"
-            onClick={() => setActiveTab('knowledge')}
-          >
-            知识库管理
-            <small>上传并自动入库</small>
-          </button>
-        </div>
+        <AppNavigation active={activeTab} onSelect={setActiveTab} />
 
         {activeTab === 'search' ? (
           <section

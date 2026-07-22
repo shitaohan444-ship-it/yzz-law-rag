@@ -50,6 +50,11 @@ describe('App', () => {
     );
     render(<App />);
 
+    expect(screen.getByRole('tab', { name: /分类管理/ })).toHaveAttribute('href', '/knowledge/categories');
+    expect(screen.getByRole('tab', { name: /回收站/ })).toHaveAttribute('href', '/knowledge/trash');
+    // 顶部五个一级模块：法条检索 / 知识问答 / 知识库管理 / 分类管理 / 回收站
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
+
     const submit = screen.getByRole('button', { name: '开始检索' });
     expect(submit).toBeDisabled();
     fireEvent.change(screen.getByLabelText('检索问题'), {

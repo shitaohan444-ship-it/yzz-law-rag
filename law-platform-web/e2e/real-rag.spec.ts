@@ -34,8 +34,32 @@ test.describe('真实 RAG 验收', () => {
     await expect(page.getByLabel('引用依据')).toHaveCount(0);
   });
 
-  test('真实上传工作资料、自动入库并识别重复文件', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name.includes('mobile'), '真实上传会改变共享知识库，仅由桌面项目串行执行');
+  test('独立分类管理逐级显示真实分类树', async ({ page }) => {
+    const internalRequests: string[] = [];
+    page.on('request', (request) => {
+      if (/:(8000|9000|19530)\b/.test(request.url())) internalRequests.push(request.url());
+    });
+    await page.goto('/knowledge/categories');
+    await expect(page.getByRole('tab', { name: /分类管理/ })).toHaveAttribute('aria-selected', 'true');
+    const firstLevel = page.getByRole('region', { name: '一级分类' });
+    const secondLevel = page.getByRole('region', { name: '二级分类' });
+    await expect(firstLevel.getByText('法律法规', { exact: true })).toBeVisible();
+    await expect(firstLevel.getByText('法律', { exact: true })).toHaveCount(0);
+    await expect(secondLevel.getByText('法律', { exact: true })).toBeVisible();
+    await secondLevel.getByRole('button', { name: /^法律/ }).click();
+    await page.getByRole('region', { name: '三级分类' }).getByRole('button', { name: /^劳动法律/ }).click();
+    await expect(page.getByRole('region', { name: '四级分类' })).toContainText('劳动合同');
+    await expect(page).toHaveURL(/category_id=\d+.*doc_page=1/);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+    await page.getByRole('tab', { name: /知识库管理/ }).click();
+    await expect(page.getByLabel('上传一级分类')).toBeVisible();
+    await expect(page.getByLabel('上传二级分类')).toBeVisible();
+    await expect(page.getByRole('button', { name: '分类管理' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '修改分类' })).toHaveCount(0);
+    expect(internalRequests).toEqual([]);
+  });
+
+  test('真实上传工作资料、自动入库并识别重复文件', async ({ page }) => {
     test.setTimeout(1_000_000);
     const sourceFile = resolve('..', 'test_files', '工作资料', '律师实务笔记.md');
 
@@ -43,7 +67,8 @@ test.describe('真实 RAG 验收', () => {
     await page.getByRole('tab', { name: /知识库管理/ }).click();
     await page.getByLabel('选择文件').setInputFiles(sourceFile);
     await page.getByLabel('文档标题').fill('公共知识库真实上传验收');
-    await page.getByLabel('知识分类').selectOption('工作资料');
+    await page.getByLabel('上传一级分类').selectOption({ label: '律所工作资料（不可直接归档）' });
+    await page.getByLabel('上传二级分类').selectOption({ label: '技术部' });
     await page.getByRole('button', { name: '新建并自动入库' }).click();
 
     await expect(page.getByText(/已入库，共 \d+ 个片段|该文件已存在/)).toBeVisible({
