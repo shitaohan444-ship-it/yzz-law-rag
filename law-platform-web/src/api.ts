@@ -84,6 +84,104 @@ async function requestJson<T>(
   }
 }
 
+export function createDraftingLiteJob(
+  files: File[],
+  cause: string,
+  knowledgeDocumentIds: string[] = [],
+): Promise<import('./types').DraftingLiteJob> {
+  const body = new FormData();
+  files.forEach((file) => body.append('files', file));
+  body.append('cause', cause);
+  body.append('knowledge_document_ids', JSON.stringify(knowledgeDocumentIds));
+  return requestJson('/api/drafting-lite/jobs', {
+    method: 'POST',
+    body,
+  }, 900_000);
+}
+
+export function listDraftingLiteCauses(): Promise<{
+  items: import('./types').DraftingLiteCause[];
+}> {
+  return requestJson('/api/drafting-lite/causes', { method: 'GET' });
+}
+
+export function listDraftingLiteMaterials(input: {
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+  caseStatus?: 'all' | 'open' | 'closed';
+} = {}): Promise<import('./types').DraftingLiteMaterialList> {
+  const params = new URLSearchParams({
+    keyword: input.keyword ?? '',
+    page: String(input.page ?? 1),
+    page_size: String(input.pageSize ?? 10),
+    case_status: input.caseStatus ?? 'all',
+  });
+  return requestJson(`/api/drafting-lite/materials?${params}`, {
+    method: 'GET',
+  });
+}
+
+export function getDraftingLiteJob(
+  jobId: string,
+): Promise<import('./types').DraftingLiteJob> {
+  return requestJson(`/api/drafting-lite/jobs/${encodeURIComponent(jobId)}`, {
+    method: 'GET',
+  });
+}
+
+export function selectDraftingLiteCause(
+  jobId: string,
+  cause: string,
+): Promise<import('./types').DraftingLiteJob> {
+  return postJson(
+    `/api/drafting-lite/jobs/${encodeURIComponent(jobId)}/cause`,
+    { cause },
+  );
+}
+
+export function confirmDraftingLiteParties(input: {
+  jobId: string;
+  version: number;
+  parties: import('./types').PartyRecord[];
+}): Promise<import('./types').DraftingLiteJob> {
+  return postJson(
+    `/api/drafting-lite/jobs/${encodeURIComponent(input.jobId)}/parties`,
+    {
+      version: input.version,
+      parties: input.parties,
+      confirmed: true,
+    },
+  );
+}
+
+export async function downloadDraftingLiteDocument(
+  jobId: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(
+    `/api/drafting-lite/jobs/${encodeURIComponent(jobId)}/download`,
+  );
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as GatewayError | null;
+    throw new ApiError(
+      payload && typeof payload.message === 'string'
+        ? payload.message
+        : '文书下载失败，请稍后重试',
+      response.status,
+    );
+  }
+  const disposition = response.headers.get('content-disposition') ?? '';
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  const plain = /filename="?([^";]+)"?/i.exec(disposition)?.[1];
+  let filename = '要素式起诉状.docx';
+  try {
+    filename = encoded ? decodeURIComponent(encoded) : plain || filename;
+  } catch {
+    filename = plain || filename;
+  }
+  return { blob: await response.blob(), filename };
+}
+
 export function searchRag(query: string, topK: number): Promise<SearchResponse> {
   return postJson<SearchResponse>('/api/rag/search', {
     query: query.trim(),

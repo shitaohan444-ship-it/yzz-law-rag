@@ -17,8 +17,10 @@ from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 from app.api.health import router as health_router
 from app.api.search import router as search_router
+from app.api.drafting_lite import router as drafting_lite_router
 from app.core.config import settings
 from app.core.database import engine
+from app.drafting_lite.service import get_drafting_lite_service
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -78,8 +80,13 @@ async def lifespan(app: FastAPI):
     if settings.is_production and settings.auth_configuration_status != "ok":
         logger.critical("refusing startup: production RAG authentication is misconfigured")
         raise RuntimeError("production RAG authentication is not configured")
+    drafting_lite = get_drafting_lite_service()
+    if settings.drafting_lite_enabled:
+        drafting_lite.startup()
     # MilvusClient 懒连接，无需显式 connect；PG/MinIO 按需连，无独占池
     yield
+    if settings.drafting_lite_enabled:
+        drafting_lite.shutdown()
     # 关闭：释放 PG engine（MilvusClient grpc 通道随进程退出）
     engine.dispose()
 
@@ -125,4 +132,5 @@ async def production_safety_headers(request: Request, call_next):
 app.include_router(health_router)
 app.include_router(documents_router)
 app.include_router(search_router)
+app.include_router(drafting_lite_router)
 app.include_router(chat_router)

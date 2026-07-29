@@ -4,9 +4,10 @@ import { ApiError, chatRag, searchRag } from './api';
 import AppNavigation from './AppNavigation';
 import { createSessionId } from './session';
 import KnowledgePanel from './KnowledgePanel';
+import LegalDraftingPanel from './LegalDraftingPanel';
 import type { ChatResponse, RagHit, SearchResponse } from './types';
 
-type ActiveTab = 'search' | 'chat' | 'knowledge';
+type ActiveTab = 'search' | 'chat' | 'drafting' | 'knowledge';
 
 const searchExample = '试用期工资最低不能少于多少';
 const chatExample = '产品缺陷造成损害生产厂家要赔吗';
@@ -34,7 +35,7 @@ function HitMeta({ hit }: { hit: RagHit }) {
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
     const requested = new URLSearchParams(window.location.search).get('tab');
-    return requested === 'knowledge' || requested === 'chat' ? requested : 'search';
+    return requested === 'knowledge' || requested === 'chat' || requested === 'drafting' ? requested : 'search';
   });
   const [sessionId] = useState(createSessionId);
   const [searchQuery, setSearchQuery] = useState('');
@@ -299,6 +300,8 @@ export default function App() {
               )}
             </div>
           </section>
+        ) : activeTab === 'drafting' ? (
+          <LegalDraftingPanel active />
         ) : (
           <KnowledgePanel />
         )}

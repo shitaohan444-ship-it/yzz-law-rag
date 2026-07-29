@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     cors_allowed_origins: str = ""  # 逗号分隔；空值表示不启用浏览器跨域
     trusted_hosts: str = "localhost,127.0.0.1,testserver,rag-api,law-rag-kb"
     expose_api_docs: bool = True  # production 会被强制关闭
-    max_request_body_bytes: int = 1_048_576
+    max_request_body_bytes: int = 110_100_480
 
     # PostgreSQL（只读 oa schema）
     postgres_host: str = "localhost"
@@ -114,6 +114,21 @@ class Settings(BaseSettings):
     # 统一切片流水线：doc→Markdown→切片（chunk_text 带 #img:{id} 占位）。
     # False 回退到旧的“纯文本切片 + 独立 image_description 向量”双路流水线。
     kb_markdown_pipeline: bool = True
+
+    # 独立轻量起诉状生成：不依赖 OA 案件、审批或旧 generation run。
+    drafting_lite_enabled: bool = True
+    drafting_lite_data_root: str = "/drafting-lite"
+    drafting_lite_retention_hours: int = 24
+    drafting_lite_max_files: int = 10
+    drafting_lite_max_total_bytes: int = 100 * 1024 * 1024
+    drafting_lite_workers: int = 2
+    drafting_lite_max_visual_pages: int = 100
+    drafting_lite_cause_threshold: float = 0.55
+    drafting_lite_llm_max_tokens: int = 4000
+    drafting_lite_template_root: str = "/templates"
+    drafting_lite_renderer_url: str = "http://document-renderer:8010"
+    drafting_lite_renderer_token: str = ""
+
 
     @property
     def database_url(self) -> str:

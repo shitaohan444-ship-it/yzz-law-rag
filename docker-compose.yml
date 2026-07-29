@@ -161,8 +161,17 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1,rag-api,law-rag-kb}
       EXPOSE_API_DOCS: ${EXPOSE_API_DOCS:-true}
-      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-1048576}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-110100480}
       MINIO_PRESIGNED_EXPIRES_SECONDS: ${MINIO_PRESIGNED_EXPIRES_SECONDS:-300}
+      DRAFTING_LITE_ENABLED: ${DRAFTING_LITE_ENABLED:-true}
+      DRAFTING_LITE_DATA_ROOT: /drafting-lite
+      DRAFTING_LITE_RETENTION_HOURS: ${DRAFTING_LITE_RETENTION_HOURS:-24}
+      DRAFTING_LITE_MAX_VISUAL_PAGES: ${DRAFTING_LITE_MAX_VISUAL_PAGES:-100}
+      DRAFTING_LITE_MAX_TOTAL_BYTES: ${DRAFTING_LITE_MAX_TOTAL_BYTES:-104857600}
+      DRAFTING_LITE_LLM_MAX_TOKENS: ${DRAFTING_LITE_LLM_MAX_TOKENS:-4000}
+      DRAFTING_LITE_TEMPLATE_ROOT: /templates
+      DRAFTING_LITE_RENDERER_URL: http://document-renderer:8010
+      DRAFTING_LITE_RENDERER_TOKEN: ${DRAFTING_LITE_RENDERER_TOKEN:-}
     ports:
       - "127.0.0.1:${KB_API_PORT:-8000}:8000"
     volumes:
@@ -174,6 +183,11 @@ services:
         source: ${RERANKER_HOST_PATH}
         target: /models/bge-reranker-v2-m3
         read_only: true
+      - type: bind
+        source: ./要素式模板
+        target: /templates
+        read_only: true
+      - drafting-lite-data:/drafting-lite
     networks:
       - law-rag-net
     depends_on:
@@ -217,6 +231,7 @@ services:
       RAG_API_TIMEOUT_MS: 120000
       RAG_INGEST_TIMEOUT_MS: 900000
       RAG_SERVICE_TOKEN: ${RAG_SERVICE_TOKEN:-}
+      DRAFTING_LITE_GATEWAY_TIMEOUT_MS: ${DRAFTING_LITE_GATEWAY_TIMEOUT_MS:-900000}
     ports:
       - "127.0.0.1:${PLATFORM_API_PORT:-3000}:3000"
     networks:
@@ -258,3 +273,6 @@ networks:
   law-rag-net:
     name: law-rag-net
     driver: bridge
+
+volumes:
+  drafting-lite-data:

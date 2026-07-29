@@ -1,0 +1,48 @@
+{
+  "schema_id": "trademark_defense.v1",
+  "version": "1.0.0",
+  "template_code": "civil_defense.trademark_infringement",
+  "document_type": "civil_defense",
+  "cause_code": "trademark_infringement",
+  "party_role": "defendant",
+  "source_path": "答辩状/要素式侵害商标权纠纷答辩状.docx",
+  "parser_version": "template-compiler-v1",
+  "sections": ["parties", "defense_claims", "facts", "own_evidence", "opponent_evidence_objections"],
+  "metadata": {
+    "mvp_party_limit": 1,
+    "signature_policy": "user_only",
+    "mediation_policy": "user_only",
+    "normalize_layout_noise": false,
+    "section_bindings": {
+      "parties": {"table_index": 0, "anchor": "当事人信息"},
+      "defense_claims": {"table_index": 0, "anchor": "答辩事项", "occurrence": 0},
+      "facts": {"table_index": 0, "anchor": "事实与理由", "occurrence": 0},
+      "own_evidence": {"table_index": 0, "anchor": "6.证据清单"},
+      "opponent_evidence_objections": {"table_index": 0, "anchor": "7.质证清单"}
+    },
+    "repeat_bindings": [
+      {"repeat_group": "own_evidence_items", "table_index": 1, "anchor": "编号"},
+      {"repeat_group": "opponent_evidence_items", "table_index": 2, "anchor": "编号"}
+    ],
+    "ai_draft_notice": "AI 草稿，须经律师审核"
+  },
+  "fields": [
+    {"field_id":"party.defendant.name","label":"答辩人姓名/名称","value_type":"string","required_policy":"required","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"pause","sensitivity":"personal","binding":{"table_index":0,"anchor":"姓名：","occurrence":0,"mode":"text"}},
+    {"field_id":"party.defendant.phone","label":"答辩人联系电话","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"联系电话：","occurrence":0,"mode":"text"}},
+    {"field_id":"party.defendant.address","label":"答辩人住所地","value_type":"string","required_policy":"required","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"pause","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"住所地（户籍所在地）：","occurrence":0,"mode":"text"}},
+    {"field_id":"defense.overall_response","label":"答辩事项总述","value_type":"string","required_policy":"required","source_policy":["material","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"（可完整表述答辩事项","occurrence":0,"mode":"multiline"}},
+    {"field_id":"defense.stop_infringement","label":"停止侵权请求异议","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"1.对停止侵权有无异议","occurrence":0,"mode":"multiline"}},
+    {"field_id":"defense.damages","label":"经济损失请求异议","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"2.对赔偿经济损失有无异议","occurrence":0,"mode":"multiline"}},
+    {"field_id":"defense.reasonable_expenses","label":"合理费用请求异议","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"3.对支付合理费用有无异议","occurrence":0,"mode":"multiline"}},
+    {"field_id":"defense.litigation_costs","label":"诉讼费用请求异议","value_type":"string","required_policy":"conditional","source_policy":["material","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"4.对负担诉讼费用有无异议","occurrence":0,"mode":"multiline"}},
+    {"field_id":"defense.other_claims","label":"其他请求异议","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"5.对其他请求有无异议","occurrence":0,"mode":"multiline"}},
+    {"field_id":"trademark.plaintiff_standing","label":"原告主体异议","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"1.对原告主体情况有无异议","occurrence":0,"mode":"multiline"}},
+    {"field_id":"trademark.right_status","label":"商标权属及权利状态异议","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"2.对原告商标权属有无异议","occurrence":0,"mode":"multiline"}},
+    {"field_id":"trademark.fame","label":"商标知名度异议","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"3.对原告商标权知名度有无异议","occurrence":0,"mode":"multiline"}},
+    {"field_id":"trademark.infringement","label":"侵权事实及构成异议","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"4.对商标侵权事实有无异议","occurrence":0,"mode":"multiline"}},
+    {"field_id":"trademark.other_defenses","label":"合法来源/在先使用等抗辩","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"5.其他事项","occurrence":0,"mode":"multiline"}},
+    {"field_id":"document.facts_and_reasons","label":"事实与理由","value_type":"string","required_policy":"required","source_policy":["oa","material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"（可完整表述纠纷涉及的事实与理由","occurrence":0,"mode":"multiline"}},
+    {"field_id":"document.evidence_list","label":"己方证据目录","value_type":"list","required_policy":"required","source_policy":["evidence"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"6.证据清单","occurrence":0,"mode":"multiline"}},
+    {"field_id":"document.opponent_evidence_objections","label":"对方证据逐项质证","value_type":"list","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"7.质证清单","occurrence":0,"mode":"multiline"}}
+  ]
+}

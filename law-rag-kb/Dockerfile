@@ -26,6 +26,9 @@ RUN python -m pip install --no-cache-dir \
 COPY app ./app
 COPY scripts ./scripts
 
+# 空命名卷首次挂载时继承此目录的属主，保证非 root Worker 可写生成产物。
+RUN install -d -o rag -g rag -m 0750 /work /drafting-lite
+
 EXPOSE 8000
 
 USER rag

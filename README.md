@@ -132,6 +132,8 @@ law-rag-project/
 
 Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据由根级 `.env` 注入。详细规则见 [MinIO对象规则](docs/MinIO对象规则.md)。
 
+当事人材料驱动的独立起诉状生成页面为 `http://127.0.0.1:5173/drafting-lite`，操作和接口说明见 [当事人材料智能起诉状](docs/drafting-lite.md)。
+
 ## 快速启动
 
 1. 首次构建并启动整套系统（PostgreSQL、MinIO、Milvus、数据库迁移、RAG API、平台 API 和前端）：

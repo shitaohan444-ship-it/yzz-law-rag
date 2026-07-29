@@ -52,8 +52,9 @@ describe('App', () => {
 
     expect(screen.getByRole('tab', { name: /分类管理/ })).toHaveAttribute('href', '/knowledge/categories');
     expect(screen.getByRole('tab', { name: /回收站/ })).toHaveAttribute('href', '/knowledge/trash');
-    // 顶部五个一级模块：法条检索 / 知识问答 / 知识库管理 / 分类管理 / 回收站
-    expect(screen.getAllByRole('tab')).toHaveLength(5);
+    expect(screen.getByRole('tab', { name: /智能起诉状/ })).toHaveAttribute('aria-selected', 'false');
+    // 顶部六个一级模块，包含智能起诉状。
+    expect(screen.getAllByRole('tab')).toHaveLength(6);
 
     const submit = screen.getByRole('button', { name: '开始检索' });
     expect(submit).toBeDisabled();

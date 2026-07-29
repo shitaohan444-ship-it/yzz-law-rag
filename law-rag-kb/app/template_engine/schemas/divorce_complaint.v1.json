@@ -1,0 +1,715 @@
+{
+  "schema_id": "civil_complaint.divorce.v1",
+  "version": "1.0.0",
+  "template_code": "civil_complaint.divorce",
+  "document_type": "civil_complaint",
+  "cause_code": "divorce",
+  "party_role": "plaintiff",
+  "source_path": "起诉状/要素式离婚纠纷起诉状.docx",
+  "parser_version": "template-compiler-v1",
+  "sections": [
+    "parties",
+    "claims",
+    "facts",
+    "authorities",
+    "evidence"
+  ],
+  "metadata": {
+    "signature_policy": "user_only",
+    "mediation_policy": "user_only",
+    "party_layout": {"version": "party.v1", "supported_roles": ["plaintiff", "defendant"], "max_per_role": 1, "entity_types_by_role": {"plaintiff": ["natural_person"], "defendant": ["natural_person"]}}
+  },
+  "fields": [
+    {
+      "field_id": "party.plaintiff.name",
+      "label": "原告姓名",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "姓名：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.gender",
+      "label": "原告性别",
+      "value_type": "enum",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "性别：",
+        "occurrence": 0,
+        "mode": "checkbox"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.birth_date",
+      "label": "原告出生日期",
+      "value_type": "date",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "出生日期：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.ethnicity",
+      "label": "原告民族",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "民族：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.phone",
+      "label": "原告联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.address",
+      "label": "原告住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（户籍所在地）：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.current_address",
+      "label": "原告经常居住地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "经常居住地：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.id_type",
+      "label": "原告证件类型",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件类型：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.id_number",
+      "label": "原告证件号码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件号码：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.name",
+      "label": "被告姓名",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "姓名：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.gender",
+      "label": "被告性别",
+      "value_type": "enum",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "性别：",
+        "occurrence": 1,
+        "mode": "checkbox"
+      }
+    },
+    {
+      "field_id": "party.defendant.birth_date",
+      "label": "被告出生日期",
+      "value_type": "date",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "出生日期：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.ethnicity",
+      "label": "被告民族",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "民族：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.phone",
+      "label": "被告联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.address",
+      "label": "被告住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（户籍所在地）：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.current_address",
+      "label": "被告经常居住地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "经常居住地：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.id_type",
+      "label": "被告证件类型",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件类型：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.id_number",
+      "label": "被告证件号码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件号码：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "document.claims",
+      "label": "完整诉讼请求",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "可完整表述诉讼请求",
+        "occurrence": 0,
+        "mode": "multiline",
+        "append_paragraph": true
+      }
+    },
+    {
+      "field_id": "divorce.dissolution",
+      "label": "解除婚姻关系",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "1. 解除婚姻关系",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.community_property",
+      "label": "夫妻共同财产",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "2. 夫妻共同财产",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.community_debt",
+      "label": "夫妻共同债务",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "3. 夫妻共同债务",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.child_custody",
+      "label": "子女直接抚养",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "4. 子女直接抚养",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.child_support",
+      "label": "子女抚养费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "5. 子女抚养费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.visitation",
+      "label": "探望权",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "6. 探望权",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.compensation",
+      "label": "离婚损害赔偿/经济补偿/经济帮助",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "7. 离婚损害赔偿",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.other",
+      "label": "其他请求",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "9. 其他请求",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.total_amount",
+      "label": "标的总额",
+      "value_type": "money",
+      "required_policy": "computed",
+      "source_policy": [
+        "computed"
+      ],
+      "generation_policy": "compute_only",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "9. 其他请求",
+        "occurrence": 0,
+        "mode": "text",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.marriage.summary",
+      "label": "婚姻关系基本情况",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "1. 婚姻关系基本情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.property.summary",
+      "label": "夫妻共同财产情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "2. 夫妻共同财产情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.debt.summary",
+      "label": "夫妻共同债务情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "3. 夫妻共同债务情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.custody.summary",
+      "label": "子女直接抚养情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "4. 子女直接抚养情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.support.summary",
+      "label": "子女抚养费情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "5. 子女抚养费情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.visitation.summary",
+      "label": "子女探望权情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "6. 子女探望权情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "divorce.compensation.summary",
+      "label": "赔偿/补偿/经济帮助相关情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "7. 赔 偿 / 补 偿 / 经 济 帮 助",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "document.facts_and_reasons",
+      "label": "事实与理由",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "可完整表述纠纷涉及的事实与理由",
+        "occurrence": 0,
+        "mode": "multiline",
+        "append_paragraph": true
+      }
+    },
+    {
+      "field_id": "document.legal_basis",
+      "label": "法律依据",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "9. 请求依据",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "document.evidence_list",
+      "label": "证据清单",
+      "value_type": "list",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "10. 证据清单",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    }
+  ]
+}
