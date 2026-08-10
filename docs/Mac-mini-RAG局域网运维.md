@@ -1,4 +1,4 @@
-# Mac mini RAG 局域网运维
+﻿# Mac mini RAG 局域网运维
 
 本文档是 Win11 主机 + Mac mini 纯局域网双机部署的唯一运维口径。涉及普通用户操作时，请只用 OA 前端；本文所有后端接口均不对普通用户开放。
 
@@ -11,15 +11,15 @@
 | 角色 | 局域网地址 | 说明 |
 |---|---|---|
 | Win11 主机 | `192.168.2.190` | 前端、平台后端、旧 RAG、PostgreSQL、MinIO、Milvus |
-| Mac mini | `192.168.2.173` | 新文档解析、切片、向量化协处理 |
+| Mac mini | `192.168.2.6` | 新文档解析、切片、向量化协处理 |
 | OA 局域网地址 | `http://192.168.2.190:5173` | 同一局域网设备可用 |
-| Mac RAG 服务 | `http://192.168.2.173:18000` | 后端接口，**非普通用户操作页面** |
+| Mac RAG 服务 | `http://192.168.2.6:18000` | 后端接口，**非普通用户操作页面** |
 | Win11 旧 RAG（内部） | `http://rag-api:8000` | Docker 内网地址，仅供平台后端调用 |
 
 当前运行配置：
 
 ```text
-RAG_DOCUMENT_API_BASE_URL=http://192.168.2.173:18000
+RAG_DOCUMENT_API_BASE_URL=http://192.168.2.6:18000
 RAG_DOCUMENT_ROUTE_MODE=initial_mac
 RAG_DOCUMENT_MAC_ALLOWLIST=         # 为空
 LawRagImportBridge=Disabled
@@ -36,7 +36,7 @@ http://192.168.2.190:5173
 ## 4. Mac RAG 服务地址
 
 ```text
-http://192.168.2.173:18000
+http://192.168.2.6:18000
 ```
 
 **仅由 Win11 platform-api 调用，不是普通用户操作页面**。提供 `/health`、`/ready` 和文档 ingest 接口。监听 `0.0.0.0:18000`，platform-api 通过局域网地址访问。
@@ -46,7 +46,7 @@ http://192.168.2.173:18000
 ```text
 OA 上传新知识库文档
 → Win11 platform-api
-→ 通过局域网调用 Mac mini（http://192.168.2.173:18000）
+→ 通过局域网调用 Mac mini（http://192.168.2.6:18000）
 → Mac mini 解析文档
 → Mac mini 按 Markdown 结构切片
 → Mac mini 用 BGE-M3 + MPS 生成 Dense/Sparse 向量
@@ -103,11 +103,11 @@ Set-Location D:\law-rag-project
 docker compose ps
 
 Test-NetConnection `
-  -ComputerName 192.168.2.173 `
+  -ComputerName 192.168.2.6 `
   -Port 18000
 
 Invoke-RestMethod `
-  -Uri "http://192.168.2.173:18000/ready" `
+  -Uri "http://192.168.2.6:18000/ready" `
   -TimeoutSec 180 |
 Format-List
 
@@ -124,7 +124,7 @@ docker compose exec -T platform-api `
 正确结果：
 
 ```text
-RAG_DOCUMENT_API_BASE_URL=http://192.168.2.173:18000
+RAG_DOCUMENT_API_BASE_URL=http://192.168.2.6:18000
 RAG_DOCUMENT_ROUTE_MODE=initial_mac
 RAG_DOCUMENT_MAC_ALLOWLIST为空
 Mac status=ready
@@ -161,7 +161,7 @@ lsof -nP -iTCP:18000 -sTCP:LISTEN
 curl -fsS http://127.0.0.1:18000/ready |
 python3 -m json.tool
 
-curl -fsS http://192.168.2.173:18000/ready |
+curl -fsS http://192.168.2.6:18000/ready |
 python3 -m json.tool
 ```
 
@@ -194,7 +194,7 @@ launchctl kickstart -k gui/$(id -u)/com.yzz.law-rag-kb
 ```
 
 4. 检查 `127.0.0.1:18000/ready`
-5. 检查 `192.168.2.173:18000/ready`
+5. 检查 `192.168.2.6:18000/ready`
 
 ## 9. Docker 启动顺序
 
@@ -223,8 +223,8 @@ docker compose ps
 ### Win11 → Mac
 
 ```powershell
-Test-NetConnection -ComputerName 192.168.2.173 -Port 18000
-ping 192.168.2.173
+Test-NetConnection -ComputerName 192.168.2.6 -Port 18000
+ping 192.168.2.6
 ```
 
 ### Mac → Win11
@@ -241,7 +241,7 @@ ping -c 4 192.168.2.190
 ```powershell
 # Win11 命令
 Invoke-RestMethod `
-  -Uri "http://192.168.2.173:18000/ready" `
+  -Uri "http://192.168.2.6:18000/ready" `
   -TimeoutSec 180 |
 Format-List
 ```
@@ -260,7 +260,7 @@ curl -fsS http://127.0.0.1:18000/ready | python3 -m json.tool
 | OA 打不开 | 5173 端口不可达 / 前端容器异常 | 核对 Win11 IP、放行防火墙 TCP 5173、`docker compose ps` |
 | 新文档 ingest 失败 | Mac 不可达或 `/ready` 非 200 | 检查 Mac LaunchAgent、18000 监听、Win11 依赖端口 |
 | Mac `/ready` 某项非 ok | 对应 Win11 依赖（PG/MinIO/Milvus）异常 | Win11 `docker compose ps` 确认基础设施 healthy |
-| platform-api 配置未生效 | 改 `.env` 后未重建 | `docker compose up -d --no-deps --force-recreate platform-api` |
+| platform-api 配置未生效 | 改 `.env` 后未刷新容器环境 | `docker compose stop platform-api && docker compose rm -f platform-api && docker compose up -d --no-build platform-api`（**不要**用 `--force-recreate`，会触发 rebuild） |
 | 首次 ingest 走了旧 RAG | 路由模式被改回 `legacy`/`allowlist` | 核对 `RAG_DOCUMENT_ROUTE_MODE=initial_mac` |
 | 局域网不通 | IP 变化或不在同一网络 | `ping` 两台机器互测，检查路由器 |
 | `/ready` 返回非 200 | 部分服务未就绪 | 等待 30s 重试；如持续失败，检查 Docker 容器和 Mac 依赖端口 |
@@ -299,11 +299,16 @@ curl -fsS http://127.0.0.1:18000/ready | python3 -m json.tool
    RAG_DOCUMENT_API_BASE_URL=http://<新Mac地址>:18000
    ```
 
-8. 只重新创建 platform-api：
+8. 只重新创建 platform-api（**用现有镜像，不要重新 build 代码**）：
 
    ```powershell
-   docker compose up -d --no-deps --force-recreate platform-api
+   docker compose stop platform-api
+   docker compose rm -f platform-api
+   docker compose up -d --no-build platform-api
    ```
+
+   > **注意**：`RAG_DOCUMENT_API_BASE_URL` 是运行时从根 `.env` 注入的环境变量，不打进镜像。因此改 IP 只需刷新容器环境，**无需也不应**重新 build。
+   > **不要**用 `docker compose up -d --force-recreate platform-api`：`docker-compose.yml` 中 platform-api 配置了 `pull_policy: build`，该命令会触发完整代码 rebuild（`pnpm run build`），耗时且可能失败。`--no-build` 可强制复用现有镜像。
 
 9. **不要**重启 PostgreSQL、MinIO、Milvus 和旧 RAG
 10. 再次验证容器内部访问 Mac 成功：
@@ -319,7 +324,7 @@ curl -fsS http://127.0.0.1:18000/ready | python3 -m json.tool
 | 设备 | 固定 IP | 绑定方式 |
 |---|---|---|
 | Win11 | `192.168.2.190` | 绑定实际使用网卡的 MAC 地址 |
-| Mac mini | `192.168.2.173` | 绑定实际使用网卡的 MAC 地址 |
+| Mac mini | `192.168.2.6` | 绑定实际使用网卡的 MAC 地址 |
 
 如果没有 DHCP 静态租约，路由器重新分配 IP 后仍需按第 13 节步骤修改两端配置。
 
@@ -333,10 +338,12 @@ curl -fsS http://127.0.0.1:18000/ready | python3 -m json.tool
    RAG_DOCUMENT_MAC_ALLOWLIST=
    ```
 
-3. 只重新创建：
+3. 只重新创建（用现有镜像，不 rebuild）：
 
    ```powershell
-   docker compose up -d --no-deps --force-recreate platform-api
+   docker compose stop platform-api
+   docker compose rm -f platform-api
+   docker compose up -d --no-build platform-api
    ```
 
 说明：
@@ -395,4 +402,5 @@ rebuild-sources
 ## 历史变更
 
 - 2026-07-31：局域网切换，Win11 地址更新为 `192.168.0.187`，Mac mini 地址更新为 `192.168.0.58`，Mac RAG 恢复监听 `0.0.0.0:18000`，platform-api 使用 `initial_mac` 模式
-- 2026-08-03：短暂切换为 Tailscale 固定地址（Win11 `100.115.212.72`、Mac `100.68.157.108`），随后切回纯局域网通信。**当前 Win11 地址为 `192.168.2.190`，Mac mini 地址为 `192.168.2.173`**，platform-api 继续使用 `initial_mac` 模式
+- 2026-08-03：短暂切换为 Tailscale 固定地址（Win11 `100.115.212.72`、Mac `100.68.157.108`），随后切回纯局域网通信。当时 Win11 地址为 `192.168.2.190`，Mac mini 地址为 `192.168.2.173`
+- 2026-08-10：更换网络，**Mac mini 地址由 `192.168.2.173` 变为 `192.168.2.6`，Win11 保持 `192.168.2.190`**。Mac `.env` 三个依赖（POSTGRES/MILVUS/MINIO）由旧 `192.168.0.127` 改为 `192.168.2.190`，`TRUSTED_HOSTS` 追加 `192.168.2.6`；Win11 根 `.env` `RAG_DOCUMENT_API_BASE_URL` 改为 `http://192.168.2.6:18000`。platform-api 用 `stop + rm + up --no-build` 重建（`--force-recreate` 会触发 rebuild）。两端 `/ready`、`/health` 全部 200，链路验证通过。

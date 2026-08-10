@@ -62,3 +62,4 @@ artifacts/legal-drafting/alembic-upgrade.sql
 
 # Accidental duplicate created outside the Python package tree
 /law-rag-kb/appdrafting_litelocality.py
+.env.backup*
