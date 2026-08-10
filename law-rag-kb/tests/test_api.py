@@ -4,6 +4,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.core.config import settings
 from app.ingest.service import DocumentNotFoundError, IngestResult
 from app.rag.chat import ChatResult
 from app.rag.llm import LLMServiceError
@@ -73,6 +74,12 @@ class ApiContractTests(unittest.TestCase):
                 score=0.98,
                 article_no="第四百八十三条",
                 chapter="第二章 合同的订立",
+                official_link={
+                    "provider": "npc_flk",
+                    "source_name": "国家法律法规数据库",
+                    "label": "官网最新版",
+                    "url": "https://flk.npc.gov.cn/detail?id=0123456789abcdef0123456789abcdef",
+                },
             )
         ]
 
@@ -84,6 +91,7 @@ class ApiContractTests(unittest.TestCase):
         hit = response.json()["hits"][0]
         self.assertEqual(hit["article_no"], "第四百八十三条")
         self.assertEqual(hit["chapter"], "第二章 合同的订立")
+        self.assertEqual(hit["official_link"]["label"], "官网最新版")
         search_mock.assert_called_once()
         args, kwargs = search_mock.call_args
         self.assertEqual(args[0], "合同什么时候成立")
@@ -131,6 +139,12 @@ class ApiContractTests(unittest.TestCase):
                     "score": 0.98,
                     "article_no": "第四百八十三条",
                     "chapter": "第二章 合同的订立",
+                    "official_link": {
+                        "provider": "npc_flk",
+                        "source_name": "国家法律法规数据库",
+                        "label": "官网最新版",
+                        "url": "https://flk.npc.gov.cn/detail?id=0123456789abcdef0123456789abcdef",
+                    },
                 }
             ],
             chat_log_id=42,
@@ -145,6 +159,7 @@ class ApiContractTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["chat_log_id"], 42)
         self.assertEqual(body["refs"][0]["article_no"], "第四百八十三条")
+        self.assertEqual(body["refs"][0]["official_link"]["provider"], "npc_flk")
 
     def test_empty_search_and_chat_inputs_are_rejected(self) -> None:
         self.assertEqual(self.client.post("/search", json={"query": ""}).status_code, 422)
@@ -191,6 +206,33 @@ class ApiContractTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "success")
         ingest_mock.assert_called_once_with(23, force=True)
+
+    @patch("app.api.documents.ingest_service.ingest_document")
+    def test_document_mutation_switch_returns_sanitized_503(self, ingest_mock) -> None:
+        with patch.object(settings, "rag_document_mutations_enabled", False):
+            response = self.client.post("/documents/23/ingest")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.json(),
+            {"detail": "document mutation service is disabled"},
+        )
+        ingest_mock.assert_not_called()
+
+    @patch(
+        "app.api.documents.ingest_service.verify_restore_artifacts",
+        return_value={"items": []},
+    )
+    def test_document_mutation_switch_does_not_block_read_only_verification(
+        self, verify_mock
+    ) -> None:
+        with patch.object(settings, "rag_document_mutations_enabled", False):
+            response = self.client.post(
+                "/documents/verify-restore", json={"doc_ids": [23]}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        verify_mock.assert_called_once_with([23])
 
     @patch("app.api.documents.ingest_service.ingest_document")
     def test_successful_document_without_force_returns_skipped(self, ingest_mock) -> None:

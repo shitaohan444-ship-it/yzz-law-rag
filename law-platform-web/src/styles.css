@@ -423,6 +423,8 @@ textarea::placeholder {
 .batch-file-list {
   display: grid;
   gap: 8px;
+  max-height: 480px;
+  overflow-y: auto;
 }
 
 .batch-file-row {
@@ -477,6 +479,12 @@ textarea::placeholder {
   font-weight: 750;
 }
 
+.batch-file-row.is-processing {
+  border-color: #176b59;
+  background: #eafaf2;
+  box-shadow: inset 4px 0 0 0 #176b59;
+}
+
 .batch-summary {
   justify-content: flex-start;
   padding: 12px 14px;
@@ -489,6 +497,42 @@ textarea::placeholder {
 
 .batch-controls {
   justify-content: flex-start;
+}
+
+.failure-delay-setting {
+  display: grid;
+  grid-template-columns: minmax(140px, auto) minmax(130px, 190px) minmax(220px, 1fr);
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border: 1px solid #dfe5e2;
+  border-radius: 9px;
+  background: #f8faf9;
+  color: #263b37;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.failure-delay-setting select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #cdd7d2;
+  border-radius: 8px;
+  background: #fff;
+  color: #263b37;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.failure-delay-setting small {
+  color: #6d7b76;
+  font-weight: 500;
+}
+
+@media (max-width: 720px) {
+  .failure-delay-setting {
+    grid-template-columns: 1fr;
+  }
 }
 
 .upload-time {
@@ -1508,6 +1552,40 @@ textarea::placeholder {
   font-size: 1.04rem;
 }
 
+.result-title-with-link,
+.reference-title-with-link {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.result-title-with-link h4 {
+  min-width: 0;
+}
+
+.official-link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  background: #e4f3ed;
+  color: #0c6958;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.official-link:hover,
+.official-link:focus-visible {
+  background: #cae9de;
+  text-decoration: underline;
+}
+
 .source {
   overflow: hidden;
   max-width: 42%;
@@ -1666,6 +1744,36 @@ details[open] summary {
 
 .reference-card .full-text {
   font-size: 0.84rem;
+}
+
+.upload-bg-indicator {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: #e8f4ee;
+  border-top: 1px solid #b8d8c4;
+  color: #1e4a2e;
+  font-size: 0.84rem;
+  font-weight: 500;
+  z-index: 100;
+  transition: opacity 0.25s;
+}
+.upload-bg-indicator:hover {
+  background: #d4ecd8;
+}
+.upload-bg-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2e7d32;
+  animation: upload-bg-pulse 1.2s ease-in-out infinite;
+}
+@keyframes upload-bg-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
 }
 
 footer {
@@ -2195,8 +2303,39 @@ footer {
   background: #eef7f3;
 }
 .drafting-cause-result small { color: var(--muted); }
+.drafting-cancel-row { display: flex; justify-content: flex-end; }
+.drafting-cause-candidates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reference-title-with-link {
+  min-width: 0;
+}
+
+.reference-title-with-link strong {
+  min-width: 0;
+}
+.drafting-cause-candidates > label {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+}
+.drafting-cause-candidates > label.is-selected {
+  border-color: #2d8b75;
+  background: #eef7f3;
+}
+.drafting-cause-candidates input { width: 18px; height: 18px; accent-color: #126f5e; }
+.drafting-cause-candidates span { display: flex; justify-content: space-between; gap: 8px; }
+.drafting-cause-candidates small { color: #12684d; font-weight: 800; }
 .drafting-complete { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .drafting-complete p { margin: 4px 0 0; }
+.drafting-download-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .drafting-create,
 .drafting-inputs,
 .drafting-review {
@@ -2288,6 +2427,7 @@ footer {
 .status-queued, .status-parsing, .status-matching_cause,
 .status-retrieving_laws, .status-drafting { background: #dff3ed; color: #12684d; }
 .status-completed { background: #daf3e8; color: #12684d; }
+.status-cancelled { background: #ececec; color: #555; }
 .danger-button { border: 1px solid #b42318; color: #b42318; background: #fff; border-radius: 9px; padding: 10px 15px; font-weight: 700; }
 
 @media (max-width: 720px) {
@@ -2296,5 +2436,6 @@ footer {
   .drafting-source-actions,
   .drafting-modal-footer { align-items: stretch; flex-direction: column; }
   .drafting-material-search { grid-template-columns: 1fr; }
+  .drafting-cause-candidates { grid-template-columns: 1fr; }
   .drafting-modal-footer > div { flex-wrap: wrap; }
 }

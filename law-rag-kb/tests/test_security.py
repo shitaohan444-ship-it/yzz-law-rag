@@ -148,8 +148,19 @@ class SecurityApiTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        authorize_mock.assert_called_once_with(USER, [16, 17])
-        search_mock.assert_called_once_with("合同", doc_ids=[16], top_k=None)
+        authorize_mock.assert_called_once_with(
+            USER,
+            [16, 17],
+            case_id_scope=None,
+            category_ids=None,
+            knowledge_types=None,
+            effective_on=None,
+            effectivity_status=None,
+            cause_code=None,
+        )
+        search_mock.assert_called_once_with(
+            "合同", doc_ids=[16], top_k=None, min_score=None
+        )
 
     @patch("app.api.documents.ingest_service.get_document_status")
     @patch("app.api.documents.can_access_document", return_value=False)

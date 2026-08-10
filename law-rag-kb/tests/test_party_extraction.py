@@ -208,8 +208,60 @@ def test_identity_card_wins_name_gender_birth_and_defaults_id_type(monkeypatch):
     assert plaintiff["gender"] == "男"
     assert plaintiff["birth_date"] == "1990-01-01"
     assert plaintiff["id_type"] == "身份证"
+    assert plaintiff["ethnicity"] == "汉族"
+    assert plaintiff["field_provenance"]["ethnicity"][0]["source_type"] == "computed"
     assert plaintiff["field_provenance"]["name"][0]["document_kind"] == "identity_card"
     assert "name" in plaintiff["field_conflicts"]
+
+
+def test_identity_address_ignores_description_label_and_uses_actual_ocr_value(
+    monkeypatch,
+):
+    result = _extract(
+        monkeypatch,
+        """案件基本信息
+委托方（原告）：陶士娇
+身份证号码：320722199002033060
+电话：15996131080
+地址：江苏省连云港市海州区凤祥名居3号楼1单元1403
+对方基本信息（被告）：薛红娟
+身份证号码：320723198809272021
+电话：18861377169
+地址：江苏省连云港市海州区板浦镇东辛村东辛街22号
+""",
+        """中华人民共和国居民身份证
+图片说明：一张身份证件的扫描件，内容包括姓名、性别、民族、出生日期、住址及公民身份证号码。
+图片识别文字：姓名 薛红娟 性别 女 民族 汉 出生 1988年9月27日 住址 江苏省连云港市海州区板
+浦镇东辛村东辛街22号
+公民身份号码 320723198809272021
+""",
+    )
+    defendant = next(
+        party for party in result["parties"] if party.get("name") == "薛红娟"
+    )
+    assert defendant["address"] == "江苏省连云港市海州区板浦镇东辛村东辛街22号"
+    assert defendant["ethnicity"] == "汉族"
+    assert all(
+        candidate["value"] != "及公民身份号码"
+        for candidate in defendant["field_conflicts"].get("address", [])
+    )
+
+
+def test_explicit_ethnicity_is_normalized_without_overwriting_minorities(monkeypatch):
+    result = _extract(
+        monkeypatch,
+        f"""原告：张三
+民族：回
+身份证号码：{PLAINTIFF_ID}
+地址：北京市东城区测试路1号
+被告：李四
+身份证号码：{DEFENDANT_ID}
+地址：南京市鼓楼区测试路2号""",
+    )
+    plaintiff = _by_role(result)["plaintiff"][0]
+    defendant = _by_role(result)["defendant"][0]
+    assert plaintiff["ethnicity"] == "回族"
+    assert defendant["ethnicity"] == "汉族"
 
 
 def test_records_conflicts_and_auto_selects_auditable_candidate(monkeypatch):
@@ -319,6 +371,8 @@ def test_future_cause_uses_public_projection_without_party_code_changes(
     values, provenance, issues = party_extraction.project_parties(result, schema)
     assert issues == []
     assert values["party.plaintiff.name"] == "张三"
+    assert values["party.plaintiff.ethnicity"] == "汉族"
+    assert provenance["party.plaintiff.ethnicity"][0]["source_type"] == "computed"
     assert values["party.defendant.name"] == "李四"
     assert provenance["party.plaintiff.name"][0]["page_no"] == 1
 
@@ -338,7 +392,7 @@ def test_future_cause_uses_public_projection_without_party_code_changes(
     assert output.is_file() and output.stat().st_size > 0
 
 
-def test_all_eight_causes_accept_the_same_public_party_result(monkeypatch):
+def test_all_ten_causes_accept_the_same_public_party_result(monkeypatch):
     natural_result = _extract(
         monkeypatch,
         f"""原告：张三
@@ -357,7 +411,7 @@ def test_all_eight_causes_accept_the_same_public_party_result(monkeypatch):
 统一社会信用代码：{DEFENDANT_CODE}
 地址：北京市海淀区创新路8号""",
     )
-    assert len(CAUSES) == 8
+    assert len(CAUSES) == 10
     for cause, config in CAUSES.items():
         schema = load_schema(SCHEMA_ROOT / config["schema"])
         result = (

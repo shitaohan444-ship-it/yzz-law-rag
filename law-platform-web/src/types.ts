@@ -1,3 +1,10 @@
+export interface OfficialLink {
+  provider: 'npc_flk';
+  source_name: '国家法律法规数据库';
+  label: '官网最新版';
+  url: string;
+}
+
 export interface RagHit {
   chunk_id: string;
   doc_id: number;
@@ -14,6 +21,7 @@ export interface RagHit {
   image_category?: string | null;
   category_id?: number | null;
   category_path?: string[] | null;
+  official_link?: OfficialLink | null;
 }
 
 export interface SearchResponse {
@@ -34,6 +42,107 @@ export interface ChatResponse {
   hits_count: number;
 }
 
+export interface LegalTemplateMatch {
+  template_id: string;
+  template_version_id: string;
+  template_code: string;
+  template_name: string;
+  confidence: number;
+  requires_confirmation: boolean;
+}
+
+export interface LegalTemplateMatchResponse {
+  items: LegalTemplateMatch[];
+}
+
+export interface LegalDraftingMissingElement {
+  field_id: string;
+  label: string;
+  missing_behavior?: string;
+  checked_sources?: string[];
+}
+
+export interface LegalDraftingConflict {
+  field_id: string;
+  label?: string;
+  message?: string;
+  conflict_type?: string;
+  candidates?: Array<Record<string, unknown>>;
+}
+
+export interface LegalDraftingIssue {
+  id?: string;
+  issue_code: string;
+  review_type: string;
+  severity: string;
+  field_id?: string;
+  message: string;
+}
+
+export interface LegalDraftingEvent {
+  event_seq: string;
+  event_type: string;
+  payload_json: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface LegalDraftingSource {
+  id: string;
+  field_id?: string | null;
+  section_id?: string | null;
+  source_type: string;
+  material_id?: string | null;
+  evidence_id?: string | null;
+  knowledge_document_id?: string | null;
+  chunk_id?: string | null;
+  attachment_id?: string | null;
+  page_no?: number | null;
+  quote_text?: string | null;
+}
+
+export interface LegalDocumentVersion {
+  id: string;
+  version_no: number;
+  version_kind: string;
+  version_status: string;
+  created_at: string;
+  structured_content_json?: Record<string, unknown> | null;
+}
+
+export interface LegalDocumentVersionResponse {
+  items: LegalDocumentVersion[];
+}
+
+export interface LegalDraftingRun {
+  id: string;
+  case_id: string;
+  run_status: string;
+  current_node: string | null;
+  progress: number;
+  input_version: number | string;
+  template_name?: string | null;
+  waiting_reason?: {
+    missing_elements?: LegalDraftingMissingElement[];
+    conflicts?: LegalDraftingConflict[];
+    review_issues?: LegalDraftingIssue[];
+    type?: string;
+    comment?: string;
+  } | null;
+  result_document_id?: string | null;
+  result_version_id?: string | null;
+  docx_attachment_id?: string | null;
+  pdf_attachment_id?: string | null;
+  result_version_status?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  issues?: LegalDraftingIssue[];
+  sources?: LegalDraftingSource[];
+  events?: LegalDraftingEvent[];
+  structured_content_json?: Record<string, unknown> | null;
+  provenance_json?: Record<string, unknown> | null;
+  audit_report_json?: Record<string, unknown> | null;
+}
+
 export type DraftingLiteStatus =
   | 'queued'
   | 'parsing'
@@ -43,7 +152,12 @@ export type DraftingLiteStatus =
   | 'retrieving_laws'
   | 'drafting'
   | 'rendering'
+  | 'drafting_evidence'
+  | 'rendering_evidence'
+  | 'collecting_evidence_media'
+  | 'packaging_evidence'
   | 'completed'
+  | 'cancelled'
   | 'failed';
 
 export interface DraftingLiteJob {
@@ -63,21 +177,35 @@ export interface DraftingLiteJob {
     document_id?: number | string;
     chunk_id?: string;
   }>;
+  cause_candidates: Array<{
+    cause_code: string;
+    label: string;
+    confidence: number;
+  }>;
   party_extraction: PartyExtractionResult | null;
   party_issues: PartyIssue[];
   party_confirmation_required: boolean;
   party_input_version: number;
   warnings: string[];
+  evidence_package_status?: 'generated' | 'partial' | null;
+  evidence_package_issues?: string[];
   error_message: string | null;
   download_url: string | null;
+  artifacts?: DraftingLiteArtifact[];
   created_at: string;
   updated_at: string;
   input_mode?: 'upload' | 'knowledge' | 'mixed';
   selected_materials?: DraftingLiteSelectedMaterial[];
 }
 
+export interface DraftingLiteArtifact {
+  type: 'complaint' | 'evidence_directory' | 'evidence_package';
+  filename: string;
+  download_url: string;
+}
+
 export interface PartySource {
-  source_type: 'material' | 'user';
+  source_type: 'material' | 'user' | 'computed';
   file_name?: string;
   page_no?: number | null;
   document_id?: number | string;
@@ -227,6 +355,7 @@ export interface KnowledgeDocumentReplaceResponse {
   document: KnowledgeDocument;
   chunk_count: number;
   replaced: true;
+  request_id: string;
 }
 
 export interface KnowledgeDocumentSource {
@@ -254,6 +383,7 @@ export interface KnowledgeDocumentSourceMutationResponse {
   document: KnowledgeDocument;
   source: KnowledgeDocumentSource;
   chunk_count: number;
+  request_id: string;
 }
 
 export interface KnowledgeDocumentListResponse {
@@ -273,6 +403,8 @@ export interface KnowledgeDocumentStatus {
   image_kept: number;
   image_filtered: number;
   vl_processed_at: string | null;
+  error_code?: string | null;
+  request_id: string;
   upload_timings: ProcessingTimings | null;
   ingest_timings: ProcessingTimings | null;
 }
@@ -286,6 +418,8 @@ export interface KnowledgeIngestResponse {
   image_filtered: number;
   vl_status: string;
   message: string;
+  error_code?: string | null;
+  request_id: string;
   upload_timings: ProcessingTimings | null;
   ingest_timings: ProcessingTimings | null;
 }
@@ -339,11 +473,13 @@ export interface TrashListResponse {
 export interface KnowledgeDocumentBatchRestoreResponse {
   restored: number;
   doc_ids: string[];
+  request_id: string;
 }
 
 export interface KnowledgeDocumentBatchPurgeResponse {
   purged: number;
   already_purged: number;
+  request_id?: string;
 }
 
 export interface KnowledgeDocumentChunk {

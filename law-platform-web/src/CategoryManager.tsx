@@ -92,6 +92,11 @@ export default function CategoryManager() {
   const [documentTotal, setDocumentTotal] = useState(0);
   const [documentPage, setDocumentPage] = useState(safePage(searchParams.get('doc_page')));
   const [documentPageSize, setDocumentPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [documentKeyword, setDocumentKeyword] = useState('');
+  const [documentStatus, setDocumentStatus] = useState('');
+  const [appliedDocumentKeyword, setAppliedDocumentKeyword] = useState('');
+  const [appliedDocumentStatus, setAppliedDocumentStatus] = useState('');
+  const [filterCategoryId, setFilterCategoryId] = useState(searchParams.get('category_id') ?? '');
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [moveTarget, setMoveTarget] = useState<KnowledgeDocument | null>(null);
   const [moveCategoryId, setMoveCategoryId] = useState('');
@@ -112,6 +117,7 @@ export default function CategoryManager() {
         .filter((node): node is KnowledgeCategoryNode => Boolean(node))
     : [];
   const moveCategory = findCategory(categories, moveCategoryId);
+  const selectedFilterCategory = findCategory(categories, filterCategoryId);
   const documentPageCount = Math.max(1, Math.ceil(documentTotal / documentPageSize));
   const batchCategory = findCategory(categories, batchCategoryId);
   const selectedCount = selectedDocIds.size;
@@ -148,6 +154,7 @@ export default function CategoryManager() {
         ? preferred.id
         : nearestActiveId ?? nextFlat.find((node) => node.status === 'active')?.id ?? '';
       setSelectedId(validId);
+      setFilterCategoryId(validId);
       if (validId !== selectedId || searchParams.get('category_id') !== validId) {
         setDocumentPage(1);
         syncUrl(validId, 1);
@@ -165,6 +172,8 @@ export default function CategoryManager() {
     categoryId: string,
     targetPage = documentPage,
     targetPageSize = documentPageSize,
+    keyword = appliedDocumentKeyword,
+    status = appliedDocumentStatus,
   ) {
     if (!categoryId) {
       setDocuments([]);
@@ -177,6 +186,8 @@ export default function CategoryManager() {
         page: targetPage,
         pageSize: targetPageSize,
         categoryId,
+        keyword,
+        status,
       });
       const lastPage = Math.max(1, Math.ceil(result.total / targetPageSize));
       if (targetPage > lastPage) {
@@ -184,6 +195,8 @@ export default function CategoryManager() {
           page: lastPage,
           pageSize: targetPageSize,
           categoryId,
+          keyword,
+          status,
         });
       }
       setDocuments(result.items);
@@ -205,19 +218,35 @@ export default function CategoryManager() {
 
   useEffect(() => {
     if (selectedId) void loadDocuments(selectedId, documentPage, documentPageSize);
-    // 分类、页码或每页数量改变时重新加载当前分类子树文档。
+    // 分类、页码、每页数量或已应用的筛选条件改变时重新加载当前分类子树文档。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, documentPage, documentPageSize]);
+  }, [selectedId, documentPage, documentPageSize, appliedDocumentKeyword, appliedDocumentStatus]);
 
   useEffect(() => {
     setSelectedDocIds(new Set());
-  }, [selectedId, documentPage, documentPageSize]);
+  }, [selectedId, documentPage, documentPageSize, appliedDocumentKeyword, appliedDocumentStatus]);
 
   function selectCategory(categoryId: string) {
     setSelectedId(categoryId);
+    setFilterCategoryId(categoryId);
     setDocumentPage(1);
     setNotice('');
     syncUrl(categoryId, 1);
+  }
+
+  function applyDocumentFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const filterCategory = findCategory(categories, filterCategoryId);
+    if (!filterCategory || filterCategory.status !== 'active') {
+      setError('请选择启用中的分类');
+      return;
+    }
+    setError('');
+    setSelectedId(filterCategory.id);
+    setAppliedDocumentKeyword(documentKeyword.trim());
+    setAppliedDocumentStatus(documentStatus);
+    setDocumentPage(1);
+    syncUrl(filterCategory.id, 1);
   }
 
   function openCreate(parentId = '') {
@@ -565,6 +594,46 @@ export default function CategoryManager() {
                 </label>
               </div>
             </div>
+            <form
+              className="filter-bar knowledge-filter-bar category-document-filter"
+              aria-label="分类文档筛选"
+              onSubmit={applyDocumentFilters}
+            >
+              <input
+                aria-label="按标题筛选"
+                value={documentKeyword}
+                onChange={(event) => setDocumentKeyword(event.target.value)}
+                placeholder="按标题搜索"
+              />
+              <CategoryCascadeSelect
+                categories={categories}
+                value={filterCategoryId}
+                onChange={setFilterCategoryId}
+                ariaPrefix="筛选"
+                includeSystem
+                className="filter-category-cascade"
+                showPath={false}
+              />
+              <select
+                aria-label="按状态筛选"
+                value={documentStatus}
+                onChange={(event) => setDocumentStatus(event.target.value)}
+              >
+                <option value="">全部状态</option>
+                <option value="pending">等待入库</option>
+                <option value="processing">正在入库</option>
+                <option value="success">入库成功</option>
+                <option value="failed">入库失败</option>
+                <option value="skipped">已存在</option>
+              </select>
+              <button className="example-button" type="submit" disabled={loadingDocuments}>筛选</button>
+              {selectedFilterCategory && (
+                <small className="category-filter-path">
+                  当前路径：{selectedFilterCategory.path.join(' / ')}
+                  {!selectedFilterCategory.assignable && ' · 请选择可直接归档的下级分类'}
+                </small>
+              )}
+            </form>
             {!loadingDocuments && documents.length > 0 && (
               <div className="batch-actions-row" role="toolbar" aria-label="批量操作">
                 <label className="document-select-row">

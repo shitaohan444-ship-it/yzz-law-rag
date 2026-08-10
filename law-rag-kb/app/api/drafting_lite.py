@@ -32,6 +32,23 @@ def _public_job(job: dict) -> dict:
         if len(source_kinds) > 1
         else ("knowledge" if source_kinds == {"knowledge"} else "upload")
     )
+    artifacts = [
+        {
+            "type": str(item.get("type")),
+            "filename": str(
+                item.get("filename")
+                or ("证据材料包.zip" if item.get("type") == "evidence_package" else "文书.docx")
+            ),
+            "download_url": (
+                f"/api/drafting-lite/jobs/{job['id']}/artifacts/"
+                f"{item.get('type')}/download"
+            ),
+        }
+        for item in (job.get("output_artifacts") or [])
+        if job.get("status") == "completed"
+        and isinstance(item, dict)
+        and item.get("type") in {"complaint", "evidence_directory", "evidence_package"}
+    ]
     return {
         "job_id": job["id"],
         "status": job["status"],
@@ -43,17 +60,25 @@ def _public_job(job: dict) -> dict:
         "confidence": job.get("confidence"),
         "template_name": job.get("template_name"),
         "cause_evidence": job.get("cause_evidence") or [],
+        "cause_candidates": job.get("cause_candidates") or [],
         "party_extraction": job.get("party_extraction") or None,
         "party_issues": job.get("party_issues") or [],
         "party_confirmation_required": job["status"] == "waiting_party_confirmation",
         "party_input_version": int(job.get("party_input_version") or 0),
         "warnings": job.get("warnings") or [],
+        "evidence_package_status": (
+            (job.get("evidence_package_result") or {}).get("status") or None
+        ),
+        "evidence_package_issues": (
+            (job.get("evidence_package_result") or {}).get("validation_issues") or []
+        ),
         "error_message": job.get("error_message"),
         "download_url": (
             f"/api/drafting-lite/jobs/{job['id']}/download"
             if job["status"] == "completed"
             else None
         ),
+        "artifacts": artifacts,
         "created_at": job["created_at"],
         "updated_at": job["updated_at"],
         "input_mode": input_mode,
@@ -94,7 +119,7 @@ async def create_job(
 ):
     if not settings.drafting_lite_enabled:
         raise HTTPException(status_code=503, detail="独立文书生成功能未启用")
-    payloads: list[tuple[str, bytes]] = []
+    payloads: list[tuple[str, bytes, str]] = []
     total = 0
     try:
         parsed_ids = json.loads(knowledge_document_ids)
@@ -110,7 +135,13 @@ async def create_job(
         total += len(content)
         if total > settings.drafting_lite_max_total_bytes:
             raise HTTPException(status_code=413, detail="上传文件总大小超过限制")
-        payloads.append((upload.filename or "material", content))
+        payloads.append(
+            (
+                upload.filename or "material",
+                content,
+                upload.content_type or "application/octet-stream",
+            )
+        )
     try:
         return _public_job(
             get_drafting_lite_service().create_job(
@@ -132,6 +163,19 @@ def get_job(
     if not job:
         raise HTTPException(status_code=404, detail="任务不存在或已过期")
     return _public_job(job)
+
+
+@router.post("/jobs/{job_id}/cancel")
+def cancel_job(
+    job_id: str,
+    _: Annotated[Principal, Depends(require_service_principal)],
+):
+    try:
+        return _public_job(get_drafting_lite_service().cancel_job(job_id))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="任务不存在或已过期") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/jobs/{job_id}/cause")
@@ -183,5 +227,33 @@ def download(
     return FileResponse(
         path,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        filename=filename,
+    )
+
+
+@router.get("/jobs/{job_id}/artifacts/{artifact_type}/download")
+def download_artifact(
+    job_id: str,
+    artifact_type: str,
+    _: Annotated[Principal, Depends(require_service_principal)],
+):
+    try:
+        path, filename = get_drafting_lite_service().download_artifact(
+            job_id,
+            artifact_type,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="任务不存在或已过期") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return FileResponse(
+        path,
+        media_type=(
+            "application/zip"
+            if artifact_type == "evidence_package"
+            else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
         filename=filename,
     )

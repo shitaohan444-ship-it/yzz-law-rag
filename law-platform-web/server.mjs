@@ -86,7 +86,9 @@ function serveFile(req, res) {
 }
 
 createServer((req, res) => {
-  if ((req.url ?? '').startsWith('/api/')) return proxyApi(req, res);
+  if ((req.url ?? '').startsWith('/api/') || (req.url ?? '').startsWith('/attachments/')) {
+    return proxyApi(req, res);
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { allow: 'GET, HEAD' }).end('Method Not Allowed');
     return;

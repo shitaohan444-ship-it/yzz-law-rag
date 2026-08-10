@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -31,6 +32,9 @@ from app.rag import describe, markdown as markdown_utils
 from app.rag.category_resolver import resolve_document_categories
 
 _CHUNK_TEXT_MAX = 65535
+_INGEST_FAILED_CODE = "RAG_INGEST_FAILED"
+_UNSUPPORTED_FILE_CODE = "RAG_UNSUPPORTED_FILE_TYPE"
+logger = logging.getLogger("uvicorn.error")
 
 
 class DocumentNotFoundError(LookupError):
@@ -55,6 +59,7 @@ class IngestResult:
     image_filtered: int = 0
     vl_status: str = "not_processed"
     message: str = ""
+    error_code: str | None = None
     upload_timings: dict | None = None
     ingest_timings: dict | None = None
 
@@ -70,6 +75,7 @@ class DocumentStatus:
     image_kept: int = 0
     image_filtered: int = 0
     vl_processed_at: datetime | None = None
+    error_code: str | None = None
     upload_timings: dict | None = None
     ingest_timings: dict | None = None
 
@@ -279,22 +285,35 @@ def ingest_document(
                 settings.milvus_collection,
                 filter=f"doc_id == {doc_id} and id not in {new_ids}",
             )
-    except UnsupportedFileTypeError as exc:
+    except UnsupportedFileTypeError:
+        logger.exception(
+            "document ingest failed doc_id=%s error_code=%s",
+            doc_id,
+            _UNSUPPORTED_FILE_CODE,
+        )
         with timer.stage("status_writeback", "状态回写"):
             _set_status(
                 doc_id,
-                EmbeddingStatus.SKIPPED,
+                EmbeddingStatus.FAILED,
                 attachment_id=attachment_id,
-                error=f"unsupported file type: {exc}",
+                error_code=_UNSUPPORTED_FILE_CODE,
                 vl_status="failed" if analyses else "not_processed",
             )
         report = timer.report("failed")
         _set_ingest_timings(doc_id, report)
         return IngestResult(
-            doc_id, EmbeddingStatus.SKIPPED, message=f"unsupported: {exc}",
+            doc_id,
+            EmbeddingStatus.FAILED,
+            message="不支持的文档格式",
+            error_code=_UNSUPPORTED_FILE_CODE,
             upload_timings=row.get("upload_timings"), ingest_timings=report
         )
     except Exception as exc:
+        logger.exception(
+            "document ingest failed doc_id=%s error_code=%s",
+            doc_id,
+            _INGEST_FAILED_CODE,
+        )
         summary = _image_counts(analyses)
         derived_status = _derive_vl_status(analyses) if analyses else "failed"
         with timer.stage("status_writeback", "状态回写"):
@@ -302,7 +321,7 @@ def ingest_document(
                 doc_id,
                 EmbeddingStatus.FAILED,
                 attachment_id=attachment_id,
-                error=str(exc),
+                error_code=_INGEST_FAILED_CODE,
                 vl_status=derived_status,
                 **summary,
             )
@@ -312,7 +331,8 @@ def ingest_document(
             doc_id,
             EmbeddingStatus.FAILED,
             vl_status=derived_status,
-            message=str(exc)[:450],
+            message="文档处理失败，请检查文件后重试",
+            error_code=_INGEST_FAILED_CODE,
             upload_timings=row.get("upload_timings"),
             ingest_timings=report,
             **summary,
@@ -356,6 +376,7 @@ def get_document_status(doc_id: int) -> DocumentStatus | None:
                 kb_document.c.image_kept,
                 kb_document.c.image_filtered,
                 kb_document.c.vl_processed_at,
+                kb_document.c.remark,
                 kb_document.c.upload_timings,
                 kb_document.c.ingest_timings,
             ).where(kb_document.c.id == doc_id)
@@ -372,6 +393,12 @@ def get_document_status(doc_id: int) -> DocumentStatus | None:
         image_kept=row["image_kept"] or 0,
         image_filtered=row["image_filtered"] or 0,
         vl_processed_at=row["vl_processed_at"],
+        error_code=(
+            row["remark"]
+            if row["embedding_status"] in {EmbeddingStatus.FAILED, EmbeddingStatus.SKIPPED}
+            and str(row["remark"] or "").startswith("RAG_")
+            else None
+        ),
         upload_timings=row["upload_timings"],
         ingest_timings=row["ingest_timings"],
     )
@@ -1490,7 +1517,7 @@ def _set_status(
     status: str,
     *,
     attachment_id: int | None,
-    error: str | None = None,
+    error_code: str | None = None,
     vl_status: str | None = None,
     image_total: int | None = None,
     image_kept: int | None = None,
@@ -1500,9 +1527,9 @@ def _set_status(
 ) -> None:
     with SessionLocal() as db:
         values: dict = {"embedding_status": status}
-        if error is not None:
-            values["remark"] = error[:500]
-        elif status == EmbeddingStatus.SUCCESS:
+        if error_code is not None:
+            values["remark"] = error_code[:500]
+        elif status in {EmbeddingStatus.PROCESSING, EmbeddingStatus.SUCCESS}:
             values["remark"] = None
         if vl_status is not None:
             values["vl_status"] = vl_status

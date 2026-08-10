@@ -40,4 +40,5 @@ openai==2.45.0            # OpenAI 兼容 LLM 客户端（当前接阿里云百�
 # unstructured              # 更多格式文档解析（重，推迟）
 # 阶段 3 检索链：reranker 复用 FlagEmbedding.FlagReranker（已含于上方 FlagEmbedding==1.2.10），无需 sentence-transformers
 #   ——避免 sentence-transformers 5.x 与 transformers==4.44.2 的版本冲突破坏入库链
-# langgraph                 # 后续多轮/Agent 增强再上状态机（当前阶段 4 为纯函数编排）
+langgraph==1.2.9
+langgraph-checkpoint-postgres==3.1.0

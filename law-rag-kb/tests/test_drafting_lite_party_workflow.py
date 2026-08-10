@@ -6,9 +6,12 @@ import sqlite3
 
 import pytest
 
-from app.api.drafting_lite import list_causes
+from app.api import drafting_lite as drafting_lite_api
+from app.api.drafting_lite import _public_job, list_causes
 from app.drafting_lite import (
     drafting_agent,
+    evidence_directory,
+    evidence_package,
     material_agent,
     party_extraction,
     renderer,
@@ -56,6 +59,57 @@ def _service(tmp_path: Path) -> DraftingLiteService:
     service.store.initialize()
     service.executor = RecordingExecutor()
     return service
+
+
+def _mock_evidence_pipeline(monkeypatch):
+    result = evidence_directory.EvidenceDirectoryResult(
+        status="placeholder",
+        items=[],
+        validation_issues=["no_verifiable_evidence"],
+    )
+    monkeypatch.setattr(
+        evidence_directory,
+        "extract_evidence_directory",
+        lambda *args, **kwargs: result,
+    )
+
+    def fake_render_evidence(
+        job_id, cause_label, plaintiff_name, evidence_result, jobs_root, template_root
+    ):
+        output = jobs_root / job_id / "output" / "证据目录.docx"
+        output.write_bytes(b"evidence-docx")
+        audit = output.parent / "evidence-directory-audit.json"
+        audit.write_text("{}", encoding="utf-8")
+        return output, output.name, audit
+
+    monkeypatch.setattr(
+        evidence_directory,
+        "render_evidence_directory",
+        fake_render_evidence,
+    )
+
+    def fake_render_package(
+        job_id,
+        cause_label,
+        plaintiff_name,
+        evidence_result,
+        evidence_directory_path,
+        manifest,
+        jobs_root,
+    ):
+        output = jobs_root / job_id / "output" / "证据材料包.zip"
+        output.write_bytes(b"zip")
+        package_result = evidence_package.EvidenceMediaPackageResult(
+            status="generated",
+            items=[],
+            package_filename=output.name,
+            package_sha256="0" * 64,
+        )
+        audit = output.parent / "evidence-package-audit.json"
+        audit.write_text("{}", encoding="utf-8")
+        return output, output.name, package_result, audit
+
+    monkeypatch.setattr(evidence_package, "render_evidence_package", fake_render_package)
 
 
 def test_party_conflict_is_auto_resolved_without_confirmation_or_repeated_ocr(
@@ -108,7 +162,7 @@ def test_party_conflict_is_auto_resolved_without_confirmation_or_repeated_ocr(
             },
         ),
     )
-    monkeypatch.setattr(research_agent, "retrieve_authorities", lambda cause, warnings: [])
+    monkeypatch.setattr(research_agent, "retrieve_authorities", lambda cause, warnings, **kwargs: [])
     monkeypatch.setattr(
         drafting_agent,
         "draft",
@@ -121,6 +175,7 @@ def test_party_conflict_is_auto_resolved_without_confirmation_or_repeated_ocr(
         return output, "起诉状.docx"
 
     monkeypatch.setattr(renderer, "render", fake_render)
+    _mock_evidence_pipeline(monkeypatch)
     service._execute(job_id)
 
     completed = service.store.get(job_id)
@@ -128,6 +183,11 @@ def test_party_conflict_is_auto_resolved_without_confirmation_or_repeated_ocr(
     assert completed["status"] == "completed"
     assert extraction_calls == 1
     assert completed["party_confirmed"] == 1
+    assert [item["type"] for item in completed["output_artifacts"]] == [
+        "complaint",
+        "evidence_directory",
+        "evidence_package",
+    ]
     assert any(
         issue["code"] == "party_field_conflict"
         for issue in completed["party_issues"]
@@ -183,9 +243,137 @@ def test_store_adds_party_columns_without_deleting_existing_jobs(tmp_path: Path)
     assert legacy["party_extraction"] == {}
     assert legacy["party_issues"] == []
     assert legacy["party_input_version"] == 0
+    assert legacy["cause_candidates"] == []
+    assert legacy["evidence_directory_result"] == {}
+    assert legacy["evidence_package_result"] == {}
+    assert legacy["output_artifacts"] == []
+    assert legacy["artifact_contract_version"] == 1
+
+
+def test_evidence_package_artifact_download_and_public_status(tmp_path: Path):
+    service = _service(tmp_path)
+    job_id = "package-download"
+    service.store.create(job_id, "private_lending", [])
+    assert service.store.get(job_id)["artifact_contract_version"] == 2
+    output = service.jobs_root / job_id / "output" / "证据材料包.zip"
+    output.parent.mkdir(parents=True)
+    output.write_bytes(b"PK-package")
+    service.store.update(
+        job_id,
+        status="completed",
+        evidence_package_result={
+            "version": "evidence_media_package.v1",
+            "status": "partial",
+            "validation_issues": ["source_missing"],
+        },
+        output_artifacts=[
+            {
+                "type": "evidence_package",
+                "filename": output.name,
+                "path": str(output),
+            }
+        ],
+    )
+
+    path, filename = service.download_artifact(job_id, "evidence_package")
+    public = _public_job(service.store.get(job_id) or {})
+
+    assert path == output.resolve()
+    assert filename == "证据材料包.zip"
+    assert public["evidence_package_status"] == "partial"
+    assert public["evidence_package_issues"] == ["source_missing"]
+    assert public["artifacts"][0]["type"] == "evidence_package"
+
+
+def test_legacy_complaint_download_and_package_download_use_correct_media_types(
+    monkeypatch, tmp_path: Path
+):
+    complaint = tmp_path / "起诉状.docx"
+    package = tmp_path / "证据材料包.zip"
+    complaint.write_bytes(b"docx")
+    package.write_bytes(b"zip")
+
+    class FakeService:
+        def download(self, job_id):
+            return complaint, complaint.name
+
+        def download_artifact(self, job_id, artifact_type):
+            assert artifact_type == "evidence_package"
+            return package, package.name
+
+    monkeypatch.setattr(
+        drafting_lite_api,
+        "get_drafting_lite_service",
+        lambda: FakeService(),
+    )
+
+    complaint_response = drafting_lite_api.download("job-1", None)
+    package_response = drafting_lite_api.download_artifact(
+        "job-1", "evidence_package", None
+    )
+
+    assert complaint_response.media_type == (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert package_response.media_type == "application/zip"
+
+
+def test_cancelled_job_is_terminal_and_rejects_late_worker_updates(tmp_path: Path):
+    service = _service(tmp_path)
+    service._started = True
+    service.store.create("cancel-me", "auto", [])
+
+    cancelled = service.cancel_job("cancel-me")
+
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["current_agent"] == "cancelled"
+    late = service.store.update(
+        "cancel-me",
+        status="completed",
+        progress=100,
+        current_agent="completed",
+    )
+    assert late["status"] == "cancelled"
+    assert late["progress"] == 0
+    with pytest.raises(RuntimeError, match="不能取消"):
+        service.cancel_job("cancel-me")
+
+
+def test_worker_stops_after_cancel_during_material_parsing(monkeypatch, tmp_path: Path):
+    service = _service(tmp_path)
+    job_id = "cancel-during-parse"
+    service.store.create(job_id, "auto", [])
+
+    def cancel_while_parsing(*args, **kwargs):
+        service.store.cancel(job_id)
+        return [{
+            "file_name": "材料.md",
+            "page_texts": [{"page_no": 1, "text": "案由：民间借贷纠纷"}],
+        }]
+
+    monkeypatch.setattr(material_agent, "parse_materials", cancel_while_parsing)
+    monkeypatch.setattr(
+        material_agent,
+        "classify_cause",
+        lambda *args, **kwargs: pytest.fail("取消后不应继续识别案由"),
+    )
+
+    service._execute(job_id)
+
+    cancelled = service.store.get(job_id)
+    assert cancelled is not None
+    assert cancelled["status"] == "cancelled"
 
 
 def test_python_cause_catalog_is_dynamic(monkeypatch):
+    response = list_causes(None)
+    codes = {item["code"] for item in response["items"]}
+    assert len(codes) == 10
+    assert {
+        "trademark_infringement",
+        "invention_patent_infringement",
+    } <= codes
+
     monkeypatch.setitem(
         CAUSES,
         "future_cause",
@@ -214,7 +402,7 @@ def test_startup_rejects_unknown_party_schema_fields(monkeypatch, tmp_path: Path
 
 
 @pytest.mark.parametrize("cause", sorted(CAUSES))
-def test_all_eight_workflows_use_the_public_party_extractor(
+def test_all_ten_workflows_use_the_public_party_extractor(
     monkeypatch, tmp_path: Path, cause: str
 ):
     service = _service(tmp_path / cause)
@@ -263,7 +451,7 @@ def test_all_eight_workflows_use_the_public_party_extractor(
         "extract_case_elements",
         lambda selected_cause, items, warnings, schema: ({}, {}),
     )
-    monkeypatch.setattr(research_agent, "retrieve_authorities", lambda selected_cause, warnings: [])
+    monkeypatch.setattr(research_agent, "retrieve_authorities", lambda selected_cause, warnings, **kwargs: [])
     monkeypatch.setattr(
         drafting_agent,
         "draft",
@@ -276,8 +464,16 @@ def test_all_eight_workflows_use_the_public_party_extractor(
         return output, output.name
 
     monkeypatch.setattr(renderer, "render", fake_render)
+    _mock_evidence_pipeline(monkeypatch)
     service._execute(job_id)
     completed = service.store.get(job_id)
     assert completed is not None
     assert completed["status"] == "completed"
     assert calls == 1
+    audit_path = (
+        service.jobs_root / job_id / "output" / "request-basis-audit.json"
+    )
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    assert audit["schema_version"] == "request_basis.v1"
+    assert audit["status"] == "placeholder"
+    assert audit["legal_text"] == "【待补充：未检索到可核验的请求依据】"

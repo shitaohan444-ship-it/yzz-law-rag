@@ -17,7 +17,7 @@ export default function CategoryManagementPage() {
       </header>
 
       <main className="workspace">
-        <AppNavigation active="categories" />
+        <AppNavigation active="categories" onSelect={() => {}} />
         <CategoryManager />
       </main>
 

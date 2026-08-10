@@ -21,8 +21,37 @@
       "opponent_evidence_objections": {"table_index": 0, "anchor": "7.质证清单"}
     },
     "repeat_bindings": [
-      {"repeat_group": "own_evidence_items", "table_index": 1, "anchor": "编号"},
-      {"repeat_group": "opponent_evidence_items", "table_index": 2, "anchor": "编号"}
+      {
+        "repeat_group": "own_evidence_items",
+        "value_field": "document.evidence_list",
+        "table_index": 1,
+        "anchor": "编号",
+        "data_row_indices": [2, 3, 5, 6, 7, 8, 9, 11, 12, 14],
+        "prototype_row_index": 14,
+        "columns": [
+          {"index": 0, "keys": ["number", "evidence_no"], "auto_number": true},
+          {"index": 1, "keys": ["page_no", "page"]},
+          {"index": 2, "keys": ["evidence_name", "name"], "fallback": true},
+          {"index": 3, "keys": ["source", "source_from"]},
+          {"index": 4, "keys": ["proof_purpose", "purpose"]}
+        ]
+      },
+      {
+        "repeat_group": "opponent_evidence_items",
+        "value_field": "document.opponent_evidence_objections",
+        "table_index": 2,
+        "anchor": "编号",
+        "data_row_indices": [2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15, 16],
+        "prototype_row_index": 16,
+        "columns": [
+          {"index": 0, "keys": ["number", "evidence_no"], "auto_number": true},
+          {"index": 1, "keys": ["evidence_name", "name"], "fallback": true},
+          {"index": 2, "keys": ["authenticity"]},
+          {"index": 3, "keys": ["legality"]},
+          {"index": 4, "keys": ["relevance"]},
+          {"index": 5, "keys": ["probative_force", "objection", "opinion"]}
+        ]
+      }
     ],
     "ai_draft_notice": "AI 草稿，须经律师审核"
   },

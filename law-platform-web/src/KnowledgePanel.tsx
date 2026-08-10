@@ -16,6 +16,7 @@ import BatchUploadPanel from './BatchUploadPanel';
 import CategoryCascadeSelect from './CategoryCascadeSelect';
 import PageJump from './PageJump';
 import { findCategory, flattenCategories } from './knowledgeCategories';
+import { useUploadActivity } from './UploadActivityContext';
 import type {
   KnowledgeCategoryNode,
   KnowledgeDocument,
@@ -106,7 +107,7 @@ function TimingGroup({ title, value }: { title: string; value: ProcessingTimings
   );
 }
 
-export default function KnowledgePanel() {
+export default function KnowledgePanel({ activeTab }: { activeTab: string }) {
   const [uploadMode, setUploadMode] = useState<'single' | 'batch'>('single');
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
@@ -136,6 +137,7 @@ export default function KnowledgePanel() {
   const [sourcesLoading, setSourcesLoading] = useState(false);
   const [replaceSource, setReplaceSource] = useState<KnowledgeDocumentSource | null>(null);
   const [replaceFile, setReplaceFile] = useState<File | null>(null);
+  const { reportActivity } = useUploadActivity();
   const [replaceTitle, setReplaceTitle] = useState('');
   const [titleTarget, setTitleTarget] = useState<KnowledgeDocument | null>(null);
   const [titleValue, setTitleValue] = useState('');
@@ -190,9 +192,9 @@ export default function KnowledgePanel() {
           status: statusFilter,
         });
       }
-      setDocuments(result.items);
-      setTotal(result.total);
-      setPage(result.page);
+      setDocuments(result.items ?? []);
+      setTotal(result.total ?? 0);
+      setPage(result.page ?? 1);
     } catch (loadError: unknown) {
       setError(messageOf(loadError));
     } finally {
@@ -201,11 +203,38 @@ export default function KnowledgePanel() {
   }
 
   useEffect(() => {
+    if (activeTab !== 'knowledge') return;
     void loadDocuments(1);
     void loadCategories().catch((loadError: unknown) => setError(messageOf(loadError)));
     // 首次进入管理页加载一次；后续筛选由表单提交触发。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 标签页切回时自动刷新文档列表（排除首次渲染）
+  const prevActiveTabRef = useRef(activeTab);
+  useEffect(() => {
+    const prev = prevActiveTabRef.current;
+    prevActiveTabRef.current = activeTab;
+    if (prev !== 'knowledge' && activeTab === 'knowledge') {
+      void loadDocuments(page, documentPageSize);
+      void loadCategories().catch((loadError: unknown) => setError(messageOf(loadError)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // 上报上传活动到全局 Context
+  useEffect(() => {
+    const activityBusy = uploading || batchBusy || Boolean(actionId);
+    if (!activityBusy) {
+      reportActivity({ busy: false, activeCount: 0, progressText: '' });
+      return;
+    }
+    reportActivity({
+      busy: true,
+      activeCount: batchBusy ? 1 : (uploading || Boolean(actionId) ? 1 : 0),
+      progressText,
+    });
+  }, [uploading, batchBusy, actionId, progressText, reportActivity]);
 
   const busy = uploading || batchBusy || titleSaving || Boolean(actionId);
   const moveCategory = findCategory(categories, moveCategoryId);

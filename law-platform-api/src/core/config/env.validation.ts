@@ -34,4 +34,29 @@ export const envValidationSchema = Joi.object({
     .max(1800000)
     .default(900000),
   RAG_SERVICE_TOKEN: Joi.string().allow('').optional(),
+  RAG_DOCUMENT_API_BASE_URL: Joi.string().uri().allow('').optional(),
+  RAG_DOCUMENT_SERVICE_TOKEN: Joi.string().allow('').optional(),
+  RAG_DOCUMENT_ROUTE_MODE: Joi.string()
+    .valid('legacy', 'allowlist', 'initial_mac', 'mac')
+    .default('allowlist'),
+  RAG_DOCUMENT_MAC_ALLOWLIST: Joi.string().allow('').default(''),
+  DRAFTING_LITE_GATEWAY_TIMEOUT_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .max(1800000)
+    .default(900000),
+
+  LEGAL_DRAFTING_WORKER_TOKEN: Joi.string().allow('').optional(),
+  LEGAL_DRAFTING_RUN_TOKEN_SECRET: Joi.string().min(32).allow('').optional(),
+  LEGAL_DRAFTING_LEASE_SECONDS: Joi.number()
+    .integer()
+    .min(30)
+    .max(600)
+    .default(120),
+  LEGAL_DRAFTING_RUN_TOKEN_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(900)
+    .max(14400)
+    .default(7200),
+  LEGAL_DRAFTING_DEV_ACTOR_ID: Joi.string().default('1'),
 });

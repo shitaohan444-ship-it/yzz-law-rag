@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -100,6 +101,7 @@ export class KnowledgeDocumentsService {
     dto: AppendDocumentSourceDto,
   ): Promise<KnowledgeDocumentSourceMutationResponse> {
     return this.withDocumentLock(docId, async () => {
+      const requestId = this.rag.createDocumentRequestId();
       const target = await this.requireSuccessfulDocument(docId);
       const prepared = this.prepareFile(file);
       const sourceTitle = dto.source_title?.trim() || prepared.filename;
@@ -187,6 +189,10 @@ export class KnowledgeDocumentsService {
         const ingested = await this.rag.ingestDocument(
           stagingDocId.toString(),
           true,
+          {
+            routingDocId: docId.toString(),
+            requestId,
+          },
         );
         if (ingested.status !== 'success')
           throw new Error('staging ingest failed');
@@ -196,6 +202,7 @@ export class KnowledgeDocumentsService {
           sourceId: sourceId.toString(),
           mode: 'append',
           sourceTitle,
+          requestId,
         });
         promotedSuccessfully = true;
         stagingDocId = null;
@@ -204,11 +211,16 @@ export class KnowledgeDocumentsService {
           document: await this.getSummary(docId),
           source,
           chunk_count: promoted.chunk_count,
+          request_id: requestId,
         };
       } catch (error: unknown) {
         if (stagingDocId !== null) {
           await this.rag
-            .cleanupStagingDocument(stagingDocId.toString())
+            .cleanupStagingDocument(
+              stagingDocId.toString(),
+              docId.toString(),
+              requestId,
+            )
             .catch(() => undefined);
         } else if (!promotedSuccessfully) {
           await this.storage
@@ -220,6 +232,7 @@ export class KnowledgeDocumentsService {
         this.rethrowSourceError(
           error,
           '后续文件处理失败，已有知识库内容未改变',
+          requestId,
         );
       }
     });
@@ -232,6 +245,7 @@ export class KnowledgeDocumentsService {
     dto: AppendDocumentSourceDto,
   ): Promise<KnowledgeDocumentSourceMutationResponse> {
     return this.withDocumentLock(docId, async () => {
+      const requestId = this.rag.createDocumentRequestId();
       const target = await this.requireSuccessfulDocument(docId);
       const current = await this.getSourceRow(sourceId, docId);
       const prepared = this.prepareFile(file);
@@ -295,6 +309,10 @@ export class KnowledgeDocumentsService {
         const ingested = await this.rag.ingestDocument(
           stagingDocId.toString(),
           true,
+          {
+            routingDocId: docId.toString(),
+            requestId,
+          },
         );
         if (ingested.status !== 'success')
           throw new Error('staging ingest failed');
@@ -304,6 +322,7 @@ export class KnowledgeDocumentsService {
           sourceId: sourceId.toString(),
           mode: 'replace',
           sourceTitle,
+          requestId,
         });
         promotedSuccessfully = true;
         stagingDocId = null;
@@ -311,24 +330,34 @@ export class KnowledgeDocumentsService {
           document: await this.getSummary(docId),
           source: await this.getSource(sourceId, docId),
           chunk_count: promoted.chunk_count,
+          request_id: requestId,
         };
       } catch (error: unknown) {
         if (stagingDocId !== null) {
           await this.rag
-            .cleanupStagingDocument(stagingDocId.toString())
+            .cleanupStagingDocument(
+              stagingDocId.toString(),
+              docId.toString(),
+              requestId,
+            )
             .catch(() => undefined);
         } else if (!promotedSuccessfully) {
           await this.storage
             .deleteFile(objectKey, stored.bucket)
             .catch(() => undefined);
         }
-        this.rethrowSourceError(error, '源文件替换失败，原来源内容未改变');
+        this.rethrowSourceError(
+          error,
+          '源文件替换失败，原来源内容未改变',
+          requestId,
+        );
       }
     });
   }
 
   async rebuildSources(docId: bigint) {
     return this.withDocumentLock(docId, async () => {
+      const requestId = this.rag.createDocumentRequestId();
       const target = await this.requireSuccessfulDocument(docId);
       const sourceRows = await this.sourceRows(docId);
       if (!sourceRows.length) {
@@ -353,6 +382,10 @@ export class KnowledgeDocumentsService {
           const result = await this.rag.ingestDocument(
             document.id.toString(),
             true,
+            {
+              routingDocId: docId.toString(),
+              requestId,
+            },
           );
           if (result.status !== 'success') {
             throw new Error('a source rebuild failed');
@@ -364,18 +397,24 @@ export class KnowledgeDocumentsService {
             sourceId: item.sourceId.toString(),
             stagingDocId: item.stagingDocId.toString(),
           })),
+          requestId,
         );
       } catch (error: unknown) {
         await Promise.all(
           staging.map((item) =>
             this.rag
-              .cleanupStagingDocument(item.stagingDocId.toString())
+              .cleanupStagingDocument(
+                item.stagingDocId.toString(),
+                docId.toString(),
+                requestId,
+              )
               .catch(() => undefined),
           ),
         );
         this.rethrowSourceError(
           error,
           '全部源文件重建失败，原知识库内容未改变',
+          requestId,
         );
       }
     });
@@ -391,6 +430,7 @@ export class KnowledgeDocumentsService {
       throw new ConflictException('该文档正在替换，请等待当前操作完成');
     }
     this.replacementLocks.add(lockKey);
+    const requestId = this.rag.createDocumentRequestId();
     let stagingDocId: bigint | null = null;
     let uploadedObject: { bucket: string; objectKey: string } | null = null;
     try {
@@ -518,6 +558,10 @@ export class KnowledgeDocumentsService {
       const ingested = await this.rag.ingestDocument(
         stagingDocId.toString(),
         true,
+        {
+          routingDocId: docId.toString(),
+          requestId,
+        },
       );
       if (ingested.status !== 'success') {
         throw new Error('staging ingest failed');
@@ -525,6 +569,7 @@ export class KnowledgeDocumentsService {
       const promoted = await this.rag.promoteDocument(
         stagingDocId.toString(),
         docId.toString(),
+        requestId,
       );
       stagingDocId = null;
       uploadedObject = null;
@@ -533,28 +578,33 @@ export class KnowledgeDocumentsService {
         document: summary,
         chunk_count: promoted.chunk_count,
         replaced: true,
+        request_id: requestId,
       };
     } catch (error: unknown) {
       if (stagingDocId !== null) {
         await this.rag
-          .cleanupStagingDocument(stagingDocId.toString())
+          .cleanupStagingDocument(
+            stagingDocId.toString(),
+            docId.toString(),
+            requestId,
+          )
           .catch(() => undefined);
       } else if (uploadedObject) {
         await this.storage
           .deleteFile(uploadedObject.objectKey, uploadedObject.bucket)
           .catch(() => undefined);
       }
-      if (
-        error instanceof BadRequestException ||
-        error instanceof ConflictException ||
-        error instanceof NotFoundException
-      ) {
+      if (error instanceof HttpException) {
         throw error;
       }
       this.logger.error(
         `知识库安全替换失败 doc_id=${lockKey}: ${getErrorMessage(error)}`,
       );
-      throw new ConflictException('新文件处理失败，原知识库内容未改变');
+      throw new ConflictException({
+        code: 'RAG_DOCUMENT_OPERATION_FAILED',
+        message: '新文件处理失败，原知识库内容未改变',
+        request_id: requestId,
+      });
     } finally {
       this.replacementLocks.delete(lockKey);
     }
@@ -1175,7 +1225,11 @@ export class KnowledgeDocumentsService {
       }
     });
 
-    return { restored: ids.length, doc_ids: ids.map(String) };
+    return {
+      restored: ids.length,
+      doc_ids: ids.map(String),
+      request_id: verify.request_id,
+    };
   }
 
   async batchPurge(
@@ -1238,7 +1292,9 @@ export class KnowledgeDocumentsService {
 
     // RAG 侧清理 Milvus chunks + kb_document_image 行 + 派生图片对象（幂等）。
     // 抛错则不标记 purged，文档留在回收站可重试。
-    await this.rag.batchDeleteDocuments(toPurgeIds.map((id) => id.toString()));
+    const requestId = await this.rag.batchDeleteDocuments(
+      toPurgeIds.map((id) => id.toString()),
+    );
 
     const attachmentIds = originals.map((a) => a.id);
     await this.prisma.$transaction(async (tx) => {
@@ -1264,6 +1320,7 @@ export class KnowledgeDocumentsService {
     return {
       purged: toPurgeIds.length,
       already_purged: alreadyPurged.length,
+      request_id: requestId,
     };
   }
 
@@ -1571,16 +1628,20 @@ export class KnowledgeDocumentsService {
       .catch(() => undefined);
   }
 
-  private rethrowSourceError(error: unknown, message: string): never {
-    if (
-      error instanceof BadRequestException ||
-      error instanceof ConflictException ||
-      error instanceof NotFoundException
-    ) {
+  private rethrowSourceError(
+    error: unknown,
+    message: string,
+    requestId: string,
+  ): never {
+    if (error instanceof HttpException) {
       throw error;
     }
     this.logger.error(`${message}: ${getErrorMessage(error)}`);
-    throw new ConflictException(message);
+    throw new ConflictException({
+      code: 'RAG_DOCUMENT_OPERATION_FAILED',
+      message,
+      request_id: requestId,
+    });
   }
 
   private async getSummary(docId: bigint): Promise<KnowledgeDocumentSummary> {

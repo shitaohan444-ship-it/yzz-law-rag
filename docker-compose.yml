@@ -15,7 +15,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "127.0.0.1:${POSTGRES_PORT}:5432"
+      - "0.0.0.0:${POSTGRES_PORT}:5432"
     volumes:
       - ./law-rag-service/data/postgres:/var/lib/postgresql/data
     networks:
@@ -36,7 +36,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
-      - "127.0.0.1:${MINIO_API_PORT}:9000"
+      - "0.0.0.0:${MINIO_API_PORT}:9000"
       - "127.0.0.1:${MINIO_CONSOLE_PORT}:9001"
     volumes:
       - ./law-rag-service/data/minio:/data
@@ -87,7 +87,7 @@ services:
     volumes:
       - ./milvus-standalone/volumes/milvus:/var/lib/milvus
     ports:
-      - "127.0.0.1:19530:19530"
+      - "0.0.0.0:19530:19530"
       - "127.0.0.1:9091:9091"
     networks:
       - law-rag-net
@@ -157,6 +157,8 @@ services:
       APP_ENV: ${APP_ENV:-development}
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       RAG_SERVICE_TOKEN: ${RAG_SERVICE_TOKEN:-}
+      RAG_DOCUMENT_MUTATIONS_ENABLED: ${RAG_DOCUMENT_MUTATIONS_ENABLED:-true}
+      RAG_OFFICIAL_LINKS_ENABLED: ${RAG_OFFICIAL_LINKS_ENABLED:-false}
       AUTH_ADMIN_ROLE_CODES: ${AUTH_ADMIN_ROLE_CODES:-rag_admin,system_admin,super_admin}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1,rag-api,law-rag-kb}
@@ -171,7 +173,10 @@ services:
       DRAFTING_LITE_LLM_MAX_TOKENS: ${DRAFTING_LITE_LLM_MAX_TOKENS:-4000}
       DRAFTING_LITE_TEMPLATE_ROOT: /templates
       DRAFTING_LITE_RENDERER_URL: http://document-renderer:8010
-      DRAFTING_LITE_RENDERER_TOKEN: ${DRAFTING_LITE_RENDERER_TOKEN:-}
+      DRAFTING_LITE_RENDERER_TOKEN: ${LEGAL_DRAFTING_RENDERER_TOKEN:-}
+      LEGAL_DRAFTING_TEMPLATE_ROOT: /templates
+      LEGAL_DRAFTING_RENDERER_URL: http://document-renderer:8010
+      LEGAL_DRAFTING_RENDERER_TOKEN: ${LEGAL_DRAFTING_RENDERER_TOKEN:-}
     ports:
       - "127.0.0.1:${KB_API_PORT:-8000}:8000"
     volumes:
@@ -231,7 +236,16 @@ services:
       RAG_API_TIMEOUT_MS: 120000
       RAG_INGEST_TIMEOUT_MS: 900000
       RAG_SERVICE_TOKEN: ${RAG_SERVICE_TOKEN:-}
+      RAG_DOCUMENT_API_BASE_URL: ${RAG_DOCUMENT_API_BASE_URL:-}
+      RAG_DOCUMENT_SERVICE_TOKEN: ${RAG_DOCUMENT_SERVICE_TOKEN:-}
+      RAG_DOCUMENT_ROUTE_MODE: ${RAG_DOCUMENT_ROUTE_MODE:-allowlist}
+      RAG_DOCUMENT_MAC_ALLOWLIST: ${RAG_DOCUMENT_MAC_ALLOWLIST:-}
       DRAFTING_LITE_GATEWAY_TIMEOUT_MS: ${DRAFTING_LITE_GATEWAY_TIMEOUT_MS:-900000}
+      LEGAL_DRAFTING_WORKER_TOKEN: ${LEGAL_DRAFTING_WORKER_TOKEN:-}
+      LEGAL_DRAFTING_RUN_TOKEN_SECRET: ${LEGAL_DRAFTING_RUN_TOKEN_SECRET:-}
+      LEGAL_DRAFTING_LEASE_SECONDS: ${LEGAL_DRAFTING_LEASE_SECONDS:-120}
+      LEGAL_DRAFTING_DEV_ACTOR_ID: ${LEGAL_DRAFTING_DEV_ACTOR_ID:-1}
+      LEGAL_DRAFTING_RUN_TOKEN_TTL_SECONDS: ${LEGAL_DRAFTING_RUN_TOKEN_TTL_SECONDS:-7200}
     ports:
       - "127.0.0.1:${PLATFORM_API_PORT:-3000}:3000"
     networks:
@@ -254,6 +268,97 @@ services:
       retries: 10
       start_period: 30s
 
+  document-renderer:
+    build:
+      context: ./law-rag-kb
+      dockerfile: Dockerfile.renderer
+    pull_policy: build
+    container_name: law-document-renderer
+    restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=768m
+    environment:
+      LEGAL_DRAFTING_RENDERER_TOKEN: ${LEGAL_DRAFTING_RENDERER_TOKEN:-}
+    networks:
+      - law-rag-net
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8010/health', timeout=5)
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  legal-drafting-worker:
+    build:
+      context: ./law-rag-kb
+      dockerfile: Dockerfile
+    pull_policy: build
+    container_name: law-legal-drafting-worker
+    restart: unless-stopped
+    init: true
+    command: ["python", "-m", "app.workflows.legal_drafting.worker"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=512m
+    env_file:
+      - ./law-rag-kb/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MILVUS_HOST: standalone
+      MILVUS_PORT: 19530
+      EMBEDDING_MODEL: /models/bge-m3
+      RERANKER_MODEL: /models/bge-reranker-v2-m3
+      MODEL_DEVICE: cpu
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      LEGAL_DRAFTING_WORKER_TOKEN: ${LEGAL_DRAFTING_WORKER_TOKEN:-}
+      LEGAL_DRAFTING_PLATFORM_BASE_URL: http://platform-api:3000
+      LEGAL_DRAFTING_TEMPLATE_ROOT: /templates
+      LEGAL_DRAFTING_OUTPUT_ROOT: /work
+      LEGAL_DRAFTING_RENDERER_URL: http://document-renderer:8010
+      LEGAL_DRAFTING_RENDERER_TOKEN: ${LEGAL_DRAFTING_RENDERER_TOKEN:-}
+      AGENT_DATABASE_URL: ${AGENT_DATABASE_URL:-}
+    volumes:
+      - type: bind
+        source: ./要素式模板
+        target: /templates
+        read_only: true
+      - type: bind
+        source: ${BGE_M3_HOST_PATH}
+        target: /models/bge-m3
+        read_only: true
+      - type: bind
+        source: ${RERANKER_HOST_PATH}
+        target: /models/bge-reranker-v2-m3
+        read_only: true
+      - legal-drafting-work:/work
+    networks:
+      - law-rag-net
+    depends_on:
+      platform-api:
+        condition: service_healthy
+      document-renderer:
+        condition: service_healthy
+
   platform-web:
     build:
       context: ./law-platform-web
@@ -262,7 +367,7 @@ services:
     container_name: law-platform-web
     restart: unless-stopped
     ports:
-      - "0.0.0.0:${PLATFORM_WEB_PORT:-5173}:8080"
+      - "${PLATFORM_WEB_PORT:-5173}:8080"
     networks:
       - law-rag-net
     depends_on:
@@ -275,4 +380,5 @@ networks:
     driver: bridge
 
 volumes:
+  legal-drafting-work:
   drafting-lite-data:

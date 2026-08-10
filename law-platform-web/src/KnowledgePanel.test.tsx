@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import KnowledgePanel from './KnowledgePanel';
+import { UploadActivityProvider } from './UploadActivityContext';
+import { FAILURE_DELAY_STORAGE_KEY } from './batchUploadUtils';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -91,6 +93,7 @@ describe('KnowledgePanel', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
+    window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -100,7 +103,7 @@ describe('KnowledgePanel', () => {
 
   it('uses the top form only for new documents and removes the misleading continue button', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ items: [], total: 0, page: 1, page_size: 5 }));
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
     expect(await screen.findByRole('button', { name: '新建并自动入库' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: '继续上传' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '批量导入' })).toBeVisible();
@@ -129,9 +132,18 @@ describe('KnowledgePanel', () => {
       throw new Error(`unexpected request: ${url}`);
     });
 
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+    const failureDelay = screen.getByLabelText('处理失败后等待时间');
+    expect(within(failureDelay).getByRole('option', { name: '5秒' })).toBeVisible();
+    expect(within(failureDelay).getByRole('option', { name: '30秒' })).toBeVisible();
+    expect(within(failureDelay).getByRole('option', { name: '1分钟' })).toBeVisible();
+    expect(within(failureDelay).getByRole('option', { name: '2分钟' })).toBeVisible();
+    expect(within(failureDelay).getByRole('option', { name: '5分钟' })).toBeVisible();
+    fireEvent.change(failureDelay, { target: { value: '30000' } });
+    expect(localStorage.getItem(FAILURE_DELAY_STORAGE_KEY)).toBe('30000');
+
     const firstFile = new File(['one'], '第一份.md', { type: 'text/markdown' });
     const secondFile = new File(['two'], '已有文件.pdf', { type: 'application/pdf' });
     fireEvent.change(screen.getByLabelText('批量选择文件'), { target: { files: [firstFile, secondFile] } });
@@ -165,7 +177,7 @@ describe('KnowledgePanel', () => {
       throw new Error(`unexpected request: ${url}`);
     });
 
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
     expect(await screen.findByText('测试法规')).toBeVisible();
     expect(screen.getByText(/最后上传：/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '修改标题' }));
@@ -195,7 +207,7 @@ describe('KnowledgePanel', () => {
       throw new Error(`unexpected request: ${url}`);
     });
 
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
     expect(await screen.findByText('测试法规')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '移动到其他分类' }));
     fireEvent.change(screen.getByLabelText('目标三级分类'), { target: { value: '3' } });
@@ -213,7 +225,7 @@ describe('KnowledgePanel', () => {
       if (String(input).startsWith('/api/rag/categories')) return jsonResponse(categoryTree);
       return jsonResponse({ items: [documentItem], total: 1, page: 1, page_size: 5 });
     });
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
 
     expect(await screen.findByLabelText('上传一级分类')).toHaveValue('1');
     expect(screen.getByLabelText('上传二级分类')).toHaveValue('2');
@@ -251,7 +263,7 @@ describe('KnowledgePanel', () => {
       throw new Error(`unexpected request: ${url}`);
     });
 
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     fireEvent.change(screen.getByLabelText('选择文件'), {
       target: { files: [new File(['# 测试法规'], 'test.md', { type: 'text/markdown' })] },
@@ -289,7 +301,7 @@ describe('KnowledgePanel', () => {
       throw new Error(`unexpected request: ${url}`);
     });
 
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     fireEvent.change(screen.getByLabelText('选择文件'), {
       target: { files: [new File(['# 新法规'], 'test.md', { type: 'text/markdown' })] },
@@ -314,7 +326,7 @@ describe('KnowledgePanel', () => {
       throw new Error(`unexpected request: ${url}`);
     });
 
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
     expect(await screen.findByText('测试法规')).toBeVisible();
     fireEvent.click(screen.getByText('处理耗时'));
     expect(screen.getByText('总耗时 820 毫秒')).toBeVisible();
@@ -348,7 +360,7 @@ describe('KnowledgePanel', () => {
       throw new Error(`unexpected request: ${url}`);
     });
 
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
     expect(await screen.findByText('测试法规')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '追加文件' }));
     fireEvent.change(screen.getByLabelText('后续文件'), { target: { files: [new File(['v2'], 'v2.md', { type: 'text/markdown' })] } });
@@ -394,7 +406,7 @@ describe('KnowledgePanel', () => {
       });
     });
 
-    render(<KnowledgePanel />);
+    render(<UploadActivityProvider><KnowledgePanel activeTab="knowledge" /></UploadActivityProvider>);
     expect(await screen.findByText('分页文档 1')).toBeVisible();
     expect(screen.getAllByRole('article')).toHaveLength(5);
     expect(screen.getByText('第 1 / 3 页')).toBeVisible();

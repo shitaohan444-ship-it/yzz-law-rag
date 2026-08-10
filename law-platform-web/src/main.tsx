@@ -5,13 +5,16 @@ import App from './App';
 import CategoryManagementPage from './CategoryManagementPage';
 import { ChunkPreviewPage, MarkdownPreviewPage } from './KnowledgePreviewPages';
 import TrashManagementPage from './TrashManagementPage';
+import { UploadActivityProvider } from './UploadActivityContext';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
+    <UploadActivityProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
+        <Route path="/drafting-lite" element={<App initialSection="drafting" />} />
         <Route path="/knowledge/categories" element={<CategoryManagementPage />} />
         <Route path="/knowledge/trash" element={<TrashManagementPage />} />
         <Route path="/knowledge/documents/:docId/markdown" element={<MarkdownPreviewPage />} />
@@ -19,5 +22,6 @@ createRoot(document.getElementById('root')!).render(
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </UploadActivityProvider>
   </StrictMode>,
 );

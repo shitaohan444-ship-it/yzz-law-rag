@@ -8,7 +8,19 @@
   "source_path": "起诉状/要素式工伤保险资格或者待遇认定起诉状.docx",
   "parser_version": "template-compiler-v1",
   "sections": ["parties", "claims", "facts", "authorities", "evidence"],
-  "metadata": {"signature_policy": "user_only", "mediation_policy": "user_only", "party_layout": {"version": "party.v1", "supported_roles": ["plaintiff", "defendant"], "max_per_role": 1, "entity_types_by_role": {"plaintiff": ["natural_person"], "defendant": ["organization"]}}},
+  "metadata": {
+    "evidence_directory": {"version": "evidence_directory.v1", "enabled": true, "source_field": "document.evidence_list", "inline_mode": "blank", "artifact_type": "evidence_directory"},
+    "signature_policy": "user_only",
+    "mediation_policy": "user_only",
+    "party_layout": {"version": "party.v1", "supported_roles": ["plaintiff", "defendant"], "max_per_role": 1, "entity_types_by_role": {"plaintiff": ["natural_person"], "defendant": ["organization"]}},
+    "request_basis": {
+      "version": "request_basis.v1",
+      "placement": "standalone",
+      "target_field": "document.legal_basis",
+      "claim_fields": ["document.claims"],
+      "fact_fields": "verified_non_party"
+    }
+  },
   "fields": [
     {"field_id":"party.plaintiff.name","label":"原告姓名","value_type":"string","required_policy":"required","source_policy":["material"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"姓名：","occurrence":0,"mode":"text"}},
     {"field_id":"party.plaintiff.gender","label":"原告性别","value_type":"enum","required_policy":"optional","source_policy":["material"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"性别：","occurrence":0,"mode":"checkbox"}},
@@ -40,7 +52,7 @@
     {"field_id":"work.illegality.summary","label":"工伤决定是否存在违法之处","value_type":"string","required_policy":"conditional","source_policy":["material","evidence"],"generation_policy":"draft_with_sources","missing_behavior":"blank","binding":{"table_index":0,"anchor":"7.工伤决定是否存在违法之处","occurrence":0,"mode":"multiline","target_cell_offset":1}},
     {"field_id":"work.prior_review.summary","label":"是否就同一争议申请过复议或提起过其他诉讼","value_type":"string","required_policy":"conditional","source_policy":["material"],"generation_policy":"draft_with_sources","missing_behavior":"blank","binding":{"table_index":0,"anchor":"8.是否就同一争议申请","occurrence":0,"mode":"multiline","target_cell_offset":1}},
     {"field_id":"document.facts_and_reasons","label":"事实与理由","value_type":"string","required_policy":"required","source_policy":["material","evidence"],"generation_policy":"draft_with_sources","missing_behavior":"blank","binding":{"table_index":0,"anchor":"可完整表述纠纷涉及的事实与理由","occurrence":0,"mode":"multiline","append_paragraph":true}},
-    {"field_id":"document.legal_basis","label":"法律依据","value_type":"string","required_policy":"required","source_policy":["material"],"generation_policy":"draft_with_sources","missing_behavior":"blank","binding":{"table_index":0,"anchor":"9.其他需要说明的内容","occurrence":0,"mode":"multiline","target_cell_offset":1}},
+    {"field_id":"document.legal_basis","label":"法律依据","value_type":"string","required_policy":"required","source_policy":["evidence"],"generation_policy":"draft_with_sources","missing_behavior":"blank","binding":{"table_index":0,"anchor":"9.其他需要说明的内容","occurrence":0,"mode":"multiline","target_cell_offset":1}},
     {"field_id":"document.evidence_list","label":"证据清单","value_type":"list","required_policy":"required","source_policy":["material","evidence"],"generation_policy":"draft_with_sources","missing_behavior":"blank","binding":{"table_index":0,"anchor":"10.证据清单","occurrence":0,"mode":"multiline","target_cell_offset":1}}
   ]
 }

@@ -22,6 +22,7 @@ function job(overrides: Partial<DraftingLiteJob> = {}): DraftingLiteJob {
     confidence: null,
     template_name: null,
     cause_evidence: [],
+    cause_candidates: [],
     warnings: [],
     party_extraction: null,
     party_issues: [],
@@ -182,6 +183,11 @@ describe('LegalDraftingPanel', () => {
         status: 'waiting_cause_selection',
         progress: 35,
         confidence: 0.2,
+        cause_candidates: [
+          { cause_code: 'private_lending', label: '民间借贷纠纷', confidence: 0.46 },
+          { cause_code: 'labor_dispute', label: '劳动争议', confidence: 0.34 },
+          { cause_code: 'sales_contract', label: '买卖合同纠纷', confidence: 0.2 },
+        ],
         warnings: ['材料不足以可靠判断案由，请手工选择后继续'],
       })),
       jsonResponse(job({
@@ -196,8 +202,10 @@ describe('LegalDraftingPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '分析材料并生成起诉状' }));
 
     expect(await screen.findByText('材料不足以可靠判断案由')).toBeVisible();
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'labor_dispute' } });
+    expect(screen.getByText('46%')).toBeVisible();
+    expect(screen.getByText('34%')).toBeVisible();
+    expect(screen.getByText('20%')).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: /劳动争议/ }));
     fireEvent.click(screen.getByRole('button', { name: '按所选案由继续生成' }));
 
     await waitFor(() => expect(callFor('/api/drafting-lite/jobs/abcdef123456/cause')).toBeDefined());
@@ -205,7 +213,29 @@ describe('LegalDraftingPanel', () => {
     expect(JSON.parse(String(causeCall[1]?.body))).toEqual({ cause: 'labor_dispute' });
   });
 
-  it('automatically downloads the completed DOCX and keeps a retry button', async () => {
+  it('cancels an in-progress intelligent complaint and clears recovery state', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    queueResponses(
+      jsonResponse(job({ status: 'drafting', progress: 70 })),
+      jsonResponse(job({ status: 'cancelled', progress: 70, current_agent: 'cancelled' })),
+    );
+    render(<LegalDraftingPanel />);
+    fireEvent.change(screen.getByLabelText('选择当事人材料'), {
+      target: { files: [new File(['借条'], '借条.pdf')] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '分析材料并生成起诉状' }));
+
+    expect(await screen.findByRole('button', { name: '取消本次撰写' })).toBeVisible();
+    expect(sessionStorage.getItem('drafting-lite-job-id')).toBe('abcdef123456');
+    fireEvent.click(screen.getByRole('button', { name: '取消本次撰写' }));
+
+    expect(await screen.findByText('本次撰写已取消')).toBeVisible();
+    expect(callFor('/api/drafting-lite/jobs/abcdef123456/cancel')).toBeDefined();
+    expect(sessionStorage.getItem('drafting-lite-job-id')).toBeNull();
+    expect(screen.getByRole('button', { name: '新建文书任务' })).toBeVisible();
+  });
+
+  it('automatically downloads the complaint and exposes all artifact buttons', async () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     vi.stubGlobal('URL', {
       ...URL,
@@ -221,6 +251,23 @@ describe('LegalDraftingPanel', () => {
         confidence: 0.96,
         template_name: '要素式民间借贷纠纷起诉状.docx',
         download_url: '/api/drafting-lite/jobs/abcdef123456/download',
+        artifacts: [
+          {
+            type: 'complaint',
+            filename: '民间借贷纠纷_张三_起诉状.docx',
+            download_url: '/api/drafting-lite/jobs/abcdef123456/artifacts/complaint/download',
+          },
+          {
+            type: 'evidence_directory',
+            filename: '民间借贷纠纷_张三_证据目录.docx',
+            download_url: '/api/drafting-lite/jobs/abcdef123456/artifacts/evidence_directory/download',
+          },
+          {
+            type: 'evidence_package',
+            filename: '民间借贷纠纷_张三_证据材料包.zip',
+            download_url: '/api/drafting-lite/jobs/abcdef123456/artifacts/evidence_package/download',
+          },
+        ],
       })),
       new Response(new Blob(['docx']), {
         status: 200,
@@ -236,9 +283,31 @@ describe('LegalDraftingPanel', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '分析材料并生成起诉状' }));
 
-    expect(await screen.findByText('要素式起诉状已生成')).toBeVisible();
+    expect(await screen.findByText('要素式起诉状、证据目录及证据材料包已生成')).toBeVisible();
     await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('button', { name: '重新下载 DOCX' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '下载起诉状' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '下载证据目录' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '下载证据材料包（ZIP）' })).toBeVisible();
+    queueResponses(new Response(new Blob(['evidence-docx']), {
+      status: 200,
+      headers: {
+        'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'content-disposition': "attachment; filename*=UTF-8''evidence.docx",
+      },
+    }));
+    fireEvent.click(screen.getByRole('button', { name: '下载证据目录' }));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(2));
+    expect(callFor('/api/drafting-lite/jobs/abcdef123456/artifacts/evidence_directory/download')).toBeDefined();
+    queueResponses(new Response(new Blob(['zip']), {
+      status: 200,
+      headers: {
+        'content-type': 'application/zip',
+        'content-disposition': "attachment; filename*=UTF-8''evidence.zip",
+      },
+    }));
+    fireEvent.click(screen.getByRole('button', { name: '下载证据材料包（ZIP）' }));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(3));
+    expect(callFor('/api/drafting-lite/jobs/abcdef123456/artifacts/evidence_package/download')).toBeDefined();
   });
 
   it('edits and confirms versioned public party extraction results', async () => {
@@ -316,7 +385,7 @@ describe('LegalDraftingPanel', () => {
     fireEvent.change(screen.getByLabelText('选择当事人材料'), {
       target: { files: [new File(['x'], '材料.txt')] },
     });
-    expect(screen.getByRole('alert')).toHaveTextContent('仅支持 PDF、DOC 和 DOCX');
+    expect(screen.getByRole('alert')).toHaveTextContent('仅支持 PDF、DOC、DOCX、JPG 和 PNG');
     expect(screen.getByRole('button', { name: '分析材料并生成起诉状' })).toBeDisabled();
   });
 });

@@ -102,6 +102,11 @@ export class DraftingLiteController {
     return this.drafting.get(jobId);
   }
 
+  @Post('jobs/:jobId/cancel')
+  cancel(@Param('jobId') jobId: string) {
+    return this.drafting.cancel(jobId);
+  }
+
   @Post('jobs/:jobId/cause')
   selectCause(
     @Param('jobId') jobId: string,
@@ -135,6 +140,28 @@ export class DraftingLiteController {
   @Get('jobs/:jobId/download')
   async download(@Param('jobId') jobId: string) {
     const result = await this.drafting.download(jobId);
+    return new StreamableFile(result.body, {
+      type: result.contentType,
+      disposition: result.disposition,
+    });
+  }
+
+  @Get('jobs/:jobId/artifacts/:artifactType/download')
+  async downloadArtifact(
+    @Param('jobId') jobId: string,
+    @Param('artifactType') artifactType: string,
+  ) {
+    if (
+      artifactType !== 'complaint' &&
+      artifactType !== 'evidence_directory' &&
+      artifactType !== 'evidence_package'
+    ) {
+      throw new BadRequestException({
+        code: 'DRAFTING_LITE_ARTIFACT_INVALID',
+        message: '文书产物类型无效',
+      });
+    }
+    const result = await this.drafting.downloadArtifact(jobId, artifactType);
     return new StreamableFile(result.body, {
       type: result.contentType,
       disposition: result.disposition,

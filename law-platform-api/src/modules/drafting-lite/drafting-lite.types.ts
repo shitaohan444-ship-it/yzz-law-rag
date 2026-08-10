@@ -7,7 +7,12 @@ export type DraftingLiteStatus =
   | 'retrieving_laws'
   | 'drafting'
   | 'rendering'
+  | 'drafting_evidence'
+  | 'rendering_evidence'
+  | 'collecting_evidence_media'
+  | 'packaging_evidence'
   | 'completed'
+  | 'cancelled'
   | 'failed';
 
 export interface DraftingLiteJob {
@@ -25,21 +30,35 @@ export interface DraftingLiteJob {
     page_no?: number | null;
     reason?: string;
   }>;
+  cause_candidates: Array<{
+    cause_code: string;
+    label: string;
+    confidence: number;
+  }>;
   party_extraction: PartyExtractionResult | null;
   party_issues: PartyIssue[];
   party_confirmation_required: boolean;
   party_input_version: number;
   warnings: string[];
+  evidence_package_status?: 'generated' | 'partial' | null;
+  evidence_package_issues?: string[];
   error_message: string | null;
   download_url: string | null;
+  artifacts: DraftingLiteArtifact[];
   created_at: string;
   updated_at: string;
   input_mode?: 'upload' | 'knowledge' | 'mixed';
   selected_materials?: DraftingLiteSelectedMaterial[];
 }
 
+export interface DraftingLiteArtifact {
+  type: 'complaint' | 'evidence_directory' | 'evidence_package';
+  filename: string;
+  download_url: string;
+}
+
 export interface PartySource {
-  source_type: 'material' | 'user';
+  source_type: 'material' | 'user' | 'computed';
   file_name?: string;
   page_no?: number | null;
   document_id?: string | number;

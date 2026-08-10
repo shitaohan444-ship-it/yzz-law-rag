@@ -1,8 +1,10 @@
 import { DragEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import {
   ApiError,
+  cancelDraftingLiteJob,
   confirmDraftingLiteParties,
   createDraftingLiteJob,
+  downloadDraftingLiteArtifact,
   downloadDraftingLiteDocument,
   getDraftingLiteJob,
   listDraftingLiteCauses,
@@ -49,7 +51,12 @@ const statusLabels: Record<DraftingLiteStatus, string> = {
   retrieving_laws: '法律检索 Agent',
   drafting: '起诉状撰写 Agent',
   rendering: '正在回填模板',
+  drafting_evidence: '正在整理证据目录',
+  rendering_evidence: '正在生成证据目录',
+  collecting_evidence_media: '正在收集证据原件',
+  packaging_evidence: '正在生成证据材料包',
   completed: '生成完成',
+  cancelled: '已取消',
   failed: '生成失败',
 };
 
@@ -60,6 +67,10 @@ const activeStatuses = new Set<DraftingLiteStatus>([
   'retrieving_laws',
   'drafting',
   'rendering',
+  'drafting_evidence',
+  'rendering_evidence',
+  'collecting_evidence_media',
+  'packaging_evidence',
 ]);
 
 function message(error: unknown): string {
@@ -67,7 +78,7 @@ function message(error: unknown): string {
 }
 
 function acceptFiles(items: File[]): File[] {
-  return items.filter((file) => /\.(pdf|docx?|PDF|DOCX?)$/.test(file.name));
+  return items.filter((file) => /\.(pdf|docx?|jpe?g|png)$/i.test(file.name));
 }
 
 function newParty(index: number): PartyRecord {
@@ -82,6 +93,7 @@ function newParty(index: number): PartyRecord {
 
 function sourceLabel(source: PartyRecord['field_provenance'][string][number]): string {
   if (source.source_type === 'user') return '用户确认';
+  if (source.source_type === 'computed') return source.note || '系统默认';
   return `${source.file_name || '材料'}${source.page_no ? `第${source.page_no}页` : '（页码缺失）'}`;
 }
 
@@ -103,6 +115,7 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const downloadedJob = useRef<string | null>(null);
+  const cancelledJobs = useRef(new Set<string>());
   // 标记初始化是否完成，防止恢复中重复触发自动下载
   const initialized = useRef(false);
 
@@ -130,7 +143,9 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
     if (!job || !activeStatuses.has(job.status)) return;
     const timer = window.setInterval(() => {
       getDraftingLiteJob(job.job_id)
-        .then(setJob)
+        .then((latest) => {
+          if (!cancelledJobs.current.has(job.job_id)) setJob(latest);
+        })
         .catch((reason) => setError(message(reason)));
     }, 1800);
     return () => window.clearInterval(timer);
@@ -140,6 +155,11 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
     if (job?.status !== 'waiting_party_confirmation') return;
     setPartyDraft(job.party_extraction?.parties ?? []);
   }, [job?.job_id, job?.party_input_version, job?.status]);
+
+  useEffect(() => {
+    if (job?.status !== 'waiting_cause_selection' || !job.cause_candidates.length) return;
+    setFallbackCause(job.cause_candidates[0].cause_code);
+  }, [job?.job_id, job?.status, job?.cause_candidates]);
 
   // 组件挂载时从 sessionStorage 恢复 jobId，向后端查询真实任务状态
   useEffect(() => {
@@ -151,7 +171,7 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
     getDraftingLiteJob(storedId)
       .then((existing) => {
         if (cancelled) return;
-        if (!existing || existing.status === 'failed') {
+        if (!existing || existing.status === 'failed' || existing.status === 'cancelled') {
           // 失败或已清理的任务不恢复
           persistJobId(null);
           return;
@@ -198,7 +218,7 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
     setError('');
     const accepted = acceptFiles(incoming);
     if (accepted.length !== incoming.length) {
-      setError('仅支持 PDF、DOC 和 DOCX 文件');
+      setError('仅支持 PDF、DOC、DOCX、JPG 和 PNG 文件');
     }
     setFiles((current) => {
       const remaining = Math.max(0, 10 - knowledgeMaterials.length - current.length);
@@ -264,6 +284,25 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
     }
   }
 
+  async function cancelDrafting() {
+    if (!job || busy) return;
+    if (!window.confirm('确定取消本次起诉状撰写吗？已生成的中间结果不会作为文书保留。')) return;
+    cancelledJobs.current.add(job.job_id);
+    setBusy(true);
+    setError('');
+    try {
+      const cancelled = await cancelDraftingLiteJob(job.job_id);
+      setJob(cancelled);
+      persistJobId(null);
+      downloadedJob.current = null;
+    } catch (reason) {
+      cancelledJobs.current.delete(job.job_id);
+      setError(message(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function updateParty(index: number, patch: Partial<PartyRecord>) {
     setPartyDraft((current) => current.map((party, item) => (
       item === index ? { ...party, ...patch } : party
@@ -287,9 +326,16 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
     }
   }
 
-  async function download(jobId: string, automatic = false) {
+  async function download(
+    jobId: string,
+    automatic = false,
+    artifactType: 'complaint' | 'evidence_directory' | 'evidence_package' = 'complaint',
+  ) {
+    setError('');
     try {
-      const result = await downloadDraftingLiteDocument(jobId);
+      const result = artifactType === 'complaint'
+        ? await downloadDraftingLiteDocument(jobId)
+        : await downloadDraftingLiteArtifact(jobId, artifactType);
       const url = URL.createObjectURL(result.blob);
       const link = document.createElement('a');
       link.href = url;
@@ -361,13 +407,13 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
             onDrop={handleDrop}
           >
             <strong>本地补充上传</strong>
-            <p>支持 PDF、DOC、DOCX；两类材料合计最多10份，总大小不超过100MB。</p>
+            <p>支持 PDF、DOC、DOCX、JPG、PNG；两类材料合计最多10份，总大小不超过100MB。</p>
             <label className="primary-button drafting-file-button">
               选择文件
               <input
                 aria-label="选择当事人材料"
                 type="file"
-                accept=".pdf,.doc,.docx"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                 multiple
                 onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
               />
@@ -507,6 +553,19 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
             <span className={`status-pill status-${job.status}`}>{statusLabels[job.status]}</span>
           </div>
 
+          {!['completed', 'failed', 'cancelled'].includes(job.status) && (
+            <div className="drafting-cancel-row">
+              <button
+                className="example-button danger-button"
+                type="button"
+                disabled={busy}
+                onClick={() => void cancelDrafting()}
+              >
+                {busy ? '正在处理…' : '取消本次撰写'}
+              </button>
+            </div>
+          )}
+
           <div className="drafting-progress" aria-label={`生成进度 ${job.progress}%`}>
             <div style={{ width: `${job.progress}%` }} />
             <span>
@@ -554,9 +613,31 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
           {job.status === 'waiting_cause_selection' && (
             <div className="drafting-inputs">
               <h3>材料不足以可靠判断案由</h3>
-              <p>请选择本次要生成的起诉状类型。该选择只决定模板，不会被当作材料事实。</p>
+              <p>以下是最符合材料的三个案由及匹配度，请人工确认。该选择只决定模板，不会被当作材料事实。</p>
+              {job.cause_candidates.length > 0 && (
+                <div className="drafting-cause-candidates" role="radiogroup" aria-label="候选案由">
+                  {job.cause_candidates.slice(0, 3).map((candidate) => (
+                    <label
+                      key={candidate.cause_code}
+                      className={fallbackCause === candidate.cause_code ? 'is-selected' : ''}
+                    >
+                      <input
+                        type="radio"
+                        name="drafting-cause-candidate"
+                        value={candidate.cause_code}
+                        checked={fallbackCause === candidate.cause_code}
+                        onChange={(event) => setFallbackCause(event.target.value)}
+                      />
+                      <span>
+                        <strong>{candidate.label}</strong>
+                        <small>{(candidate.confidence * 100).toFixed(0)}%</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
               <label>
-                选择案由
+                选择其他案由
                 <select value={fallbackCause} onChange={(event) => setFallbackCause(event.target.value)}>
                   {causes.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
                 </select>
@@ -710,8 +791,22 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
 
           {job.status === 'completed' && (
             <div className="success-card drafting-complete">
-              <div><strong>要素式起诉状已生成</strong><p>浏览器已自动下载 DOCX；如未下载，请点击右侧按钮。</p></div>
-              <button className="primary-button" type="button" onClick={() => download(job.job_id)}>重新下载 DOCX</button>
+              <div>
+                <strong>要素式起诉状、证据目录及证据材料包已生成</strong>
+                <p>浏览器已自动下载起诉状；证据目录和证据材料包请通过独立按钮下载。</p>
+                {job.evidence_package_status === 'partial' && (
+                  <p className="drafting-package-warning">部分证据材料未能取得原件，压缩包内已附缺失说明。</p>
+                )}
+              </div>
+              <div className="drafting-download-actions">
+                <button className="primary-button" type="button" onClick={() => download(job.job_id)}>下载起诉状</button>
+                {job.artifacts?.some((item) => item.type === 'evidence_directory') && (
+                  <button className="example-button" type="button" onClick={() => download(job.job_id, false, 'evidence_directory')}>下载证据目录</button>
+                )}
+                {job.artifacts?.some((item) => item.type === 'evidence_package') && (
+                  <button className="example-button" type="button" onClick={() => download(job.job_id, false, 'evidence_package')}>下载证据材料包（ZIP）</button>
+                )}
+              </div>
             </div>
           )}
 
@@ -722,7 +817,14 @@ export default function LegalDraftingPanel({ active = true }: { active?: boolean
             </div>
           )}
 
-          {(job.status === 'completed' || job.status === 'failed') && (
+          {job.status === 'cancelled' && (
+            <div className="warning-card" role="status">
+              <strong>本次撰写已取消</strong>
+              <p>任务已停止，不会再继续检索、撰写或生成 DOCX。</p>
+            </div>
+          )}
+
+          {(job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') && (
             <button className="example-button" type="button" onClick={reset}>新建文书任务</button>
           )}
         </div>

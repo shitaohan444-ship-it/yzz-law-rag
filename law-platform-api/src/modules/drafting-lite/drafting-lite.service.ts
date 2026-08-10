@@ -221,6 +221,13 @@ export class DraftingLiteService {
     });
   }
 
+  cancel(jobId: string): Promise<DraftingLiteJob> {
+    return this.requestJson(
+      `/drafting-lite/jobs/${encodeURIComponent(jobId)}/cancel`,
+      { method: 'POST' },
+    );
+  }
+
   listCauses(): Promise<{ items: DraftingLiteCause[] }> {
     return this.requestJson('/drafting-lite/causes', { method: 'GET' });
   }
@@ -251,8 +258,23 @@ export class DraftingLiteService {
   }
 
   async download(jobId: string): Promise<{ body: Buffer; contentType: string; disposition: string }> {
-    const response = await this.request(
+    return this.downloadPath(
       `/drafting-lite/jobs/${encodeURIComponent(jobId)}/download`,
+    );
+  }
+
+  async downloadArtifact(
+    jobId: string,
+    artifactType: 'complaint' | 'evidence_directory' | 'evidence_package',
+  ): Promise<{ body: Buffer; contentType: string; disposition: string }> {
+    return this.downloadPath(
+      `/drafting-lite/jobs/${encodeURIComponent(jobId)}/artifacts/${encodeURIComponent(artifactType)}/download`,
+    );
+  }
+
+  private async downloadPath(path: string): Promise<{ body: Buffer; contentType: string; disposition: string }> {
+    const response = await this.request(
+      path,
       { method: 'GET' },
     );
     return {

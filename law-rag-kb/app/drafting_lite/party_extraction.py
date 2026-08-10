@@ -51,7 +51,7 @@ PARTY_FIELD_CATALOG: dict[str, dict[str, str]] = {
 }
 SUPPORTED_TEMPLATE_PARTY_FIELDS = {
     f"party.{role}.{field}"
-    for role in ("plaintiff", "defendant")
+    for role in ("plaintiff", "defendant", "third_party")
     for field in PARTY_FIELDS
 }
 
@@ -108,8 +108,13 @@ _IDENTITY_NAME = re.compile(
     r"(?:姓名|姓\s*名)\s*[：:]?\s*([\u3400-\u9fff·]{2,20})"
 )
 _IDENTITY_GENDER = re.compile(r"(?:性别|性\s*别)\s*[：:]?\s*([男女])")
+_IDENTITY_ETHNICITY = re.compile(
+    r"(?:民族|民\s*族)\s*[：:]?\s*([\u3400-\u9fff]{1,10}(?:族)?)"
+)
 _IDENTITY_ADDRESS = re.compile(
-    r"(?:住址|住\s*址)\s*[：:]?\s*([^\n；;]{3,160})"
+    r"(?:住址|住\s*址)\s*[：:]?\s*([\s\S]{1,240}?)"
+    r"(?=\s*(?:公民身份(?:证)?号码|居民身份证(?:号码|号)?|"
+    r"身份证(?:号码|号)?|证件(?:号码|号)|$))"
 )
 _LICENSE_NAME = re.compile(
     r"(?:企业名称|名称)\s*[：:]?\s*([^\n，,；;]{2,100})"
@@ -213,7 +218,20 @@ def _choose_candidate(
     usable = [item for item in candidates if item.get("value") not in (None, "")]
     if not usable:
         return None
-    if field_id == "id_number":
+    if field_id in {
+        "address",
+        "current_address",
+        "organization_address",
+        "organization_registration_address",
+    }:
+        usable = [
+            {**item, "value": normalized}
+            for item in usable
+            if (normalized := _normalize_address(item.get("value")))
+        ]
+        if not usable:
+            return None
+    elif field_id == "id_number":
         valid = [
             item for item in usable if _valid_mainland_id(str(item["value"]))
         ]
@@ -256,6 +274,65 @@ def _normalize_text(value: Any) -> str | None:
         return None
     normalized = re.sub(r"\s+", " ", str(value)).strip(" ：:；;，,。")
     return normalized or None
+
+
+_ADDRESS_BOUNDARY = re.compile(
+    r"(?:公民身份(?:证)?号码|居民身份证(?:号码|号)?|"
+    r"身份证(?:号码|号)?|证件(?:号码|号|类型)|统一社会信用代码|"
+    r"联系电话|电话|手机|性别|民族|出生日期|出生|"
+    r"工作单位|单位|职务|法定代表人|负责人|案由|阶段|诉求|请求)"
+)
+_ADDRESS_COMPONENT = re.compile(
+    r"省|自治区|特别行政区|市|州|盟|区|县|旗|镇|乡|"
+    r"街道|街|路|巷|村|社区|组|队|号|弄|苑|小区|楼|幢|单元|室"
+)
+
+
+def _normalize_address(value: Any) -> str | None:
+    """Normalize an address and reject OCR field labels masquerading as values."""
+    normalized = _normalize_text(value)
+    if not normalized:
+        return None
+    normalized = re.sub(
+        r"(?<=[\u3400-\u9fff0-9])\s+(?=[\u3400-\u9fff0-9])", "", normalized
+    )
+    normalized = re.sub(r"^(?:及|和|与|、)+", "", normalized).strip()
+    boundary = _ADDRESS_BOUNDARY.search(normalized)
+    if boundary:
+        normalized = normalized[: boundary.start()].rstrip(" ：:；;，,。、")
+    if len(normalized) < 4 or not re.search(r"[\u3400-\u9fff]", normalized):
+        return None
+    if _ADDRESS_BOUNDARY.fullmatch(normalized):
+        return None
+    # A useful Chinese address normally contains at least one administrative,
+    # road, village or building component. This filters descriptions such as
+    # "及公民身份号码" without tying the rule to a specific case.
+    if not _ADDRESS_COMPONENT.search(normalized):
+        return None
+    return normalized
+
+
+def _address_score(value: str) -> tuple[int, int]:
+    return (len(_ADDRESS_COMPONENT.findall(value)), len(value))
+
+
+def _best_address(pattern: re.Pattern[str], text: str) -> str | None:
+    candidates = [
+        value
+        for match in pattern.finditer(text)
+        if (value := _normalize_address(match.group(1)))
+    ]
+    return max(candidates, key=_address_score, default=None)
+
+
+def _normalize_ethnicity(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return None
+    normalized = re.sub(r"^(?:民族) *[：:]?\s*", "", normalized).strip()
+    if not re.fullmatch(r"[\u3400-\u9fff]{1,10}", normalized):
+        return None
+    return normalized if normalized.endswith("族") else f"{normalized}族"
 
 
 def _normalize_role(value: Any) -> str:
@@ -395,6 +472,15 @@ def _normalize_party(
         elif field_id == "gender":
             normalized = _normalize_text(value)
             party[field_id] = normalized if normalized in {"男", "女"} else None
+        elif field_id == "ethnicity":
+            party[field_id] = _normalize_ethnicity(value)
+        elif field_id in {
+            "address",
+            "current_address",
+            "organization_address",
+            "organization_registration_address",
+        }:
+            party[field_id] = _normalize_address(value)
         else:
             party[field_id] = _normalize_text(value)
     party["entity_type"] = _normalize_entity_type(raw.get("entity_type"), party)
@@ -641,6 +727,19 @@ def _finalize_parties(parties: list[dict[str, Any]]) -> list[dict[str, Any]]:
         occupied_roles.add(role)
     for index, party in enumerate(merged, start=1):
         _identity_derivations(party)
+        if party.get("entity_type") == "natural_person":
+            ethnicity = _normalize_ethnicity(party.get("ethnicity"))
+            if ethnicity:
+                party["ethnicity"] = ethnicity
+            else:
+                party["ethnicity"] = "汉族"
+                party.setdefault("field_provenance", {})["ethnicity"] = [
+                    {
+                        "source_type": "computed",
+                        "derived_from": "natural_person_default_ethnicity",
+                        "note": "材料未载明民族，按系统默认值填写汉族",
+                    }
+                ]
         identity = "|".join(sorted(_identity_keys(party))) or str(index)
         party["party_id"] = hashlib.sha256(
             f"{party['role']}|{identity}".encode("utf-8")
@@ -667,12 +766,18 @@ def _deterministic_parties(materials: list[dict[str, Any]]) -> list[dict[str, An
                     for field_id in ("entity_type", "name", "id_number", "id_type"):
                         party["field_provenance"][field_id] = [deepcopy(source)]
                     gender_match = _IDENTITY_GENDER.search(text)
-                    address_match = _IDENTITY_ADDRESS.search(text)
+                    ethnicity_match = _IDENTITY_ETHNICITY.search(text)
+                    address = _best_address(_IDENTITY_ADDRESS, text)
                     if gender_match:
                         party["gender"] = gender_match.group(1)
                         party["field_provenance"]["gender"] = [deepcopy(source)]
-                    if address_match:
-                        party["address"] = _normalize_text(address_match.group(1))
+                    if ethnicity_match:
+                        party["ethnicity"] = _normalize_ethnicity(
+                            ethnicity_match.group(1)
+                        )
+                        party["field_provenance"]["ethnicity"] = [deepcopy(source)]
+                    if address:
+                        party["address"] = address
                         party["field_provenance"]["address"] = [deepcopy(source)]
                     parties.append(party)
             elif kind == "business_license":
@@ -689,11 +794,9 @@ def _deterministic_parties(materials: list[dict[str, Any]]) -> list[dict[str, An
                         "unified_social_credit_code",
                     ):
                         party["field_provenance"][field_id] = [deepcopy(source)]
-                    address_match = _ADDRESS.search(text)
-                    if address_match:
-                        party["organization_registration_address"] = _normalize_text(
-                            address_match.group(1)
-                        )
+                    address = _best_address(_ADDRESS, text)
+                    if address:
+                        party["organization_registration_address"] = address
                         party["field_provenance"][
                             "organization_registration_address"
                         ] = [deepcopy(source)]
@@ -731,13 +834,21 @@ def _deterministic_parties(materials: list[dict[str, Any]]) -> list[dict[str, An
                     (_ID_NUMBER, "id_number"),
                     (_CREDIT_CODE, "unified_social_credit_code"),
                     (_PHONE, "organization_phone" if entity_type == "organization" else "phone"),
+                    (_IDENTITY_ETHNICITY, "ethnicity"),
                     (_ADDRESS, "organization_address" if entity_type == "organization" else "address"),
                     (_LEGAL_REPRESENTATIVE, "legal_representative"),
                 ):
-                    field_match = pattern.search(window)
-                    if not field_match:
+                    if field_id in {"address", "organization_address"}:
+                        party[field_id] = _best_address(pattern, window)
+                    else:
+                        field_match = pattern.search(window)
+                        party[field_id] = (
+                            _normalize_text(field_match.group(1))
+                            if field_match
+                            else None
+                        )
+                    if not party[field_id]:
                         continue
-                    party[field_id] = _normalize_text(field_match.group(1))
                     if field_id in {"id_number", "unified_social_credit_code"}:
                         party[field_id] = str(party[field_id]).upper()
                     party["field_provenance"][field_id] = [deepcopy(source)]
@@ -838,6 +949,7 @@ def _eligible_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
         source
         for source in sources
         if source.get("source_type") == "user"
+        or source.get("source_type") == "computed"
         or (
             source.get("source_type") == "material"
             and any(
@@ -1049,7 +1161,7 @@ def evaluate_party_issues(
             )
     party_by_role = {
         role: next((item for item in parties if item.get("role") == role), None)
-        for role in ("plaintiff", "defendant")
+        for role in ("plaintiff", "defendant", "third_party")
     }
     for field in getattr(schema, "fields", []):
         if not field.field_id.startswith("party.") or field.required_policy != "required":
@@ -1096,10 +1208,26 @@ def project_parties(
     values: dict[str, Any] = {}
     provenance: dict[str, list[dict[str, Any]]] = {}
     schema_fields = {field.field_id for field in getattr(schema, "fields", [])}
-    for role in ("plaintiff", "defendant"):
+    party_records: dict[str, list[dict[str, Any]]] = {}
+    for role in ("plaintiff", "defendant", "third_party"):
         matches = [item for item in parties if item.get("role") == role]
         if not matches:
             continue
+        eligible_records = []
+        for item in matches:
+            record = {
+                "party_id": item.get("party_id"),
+                "role": role,
+                "entity_type": item.get("entity_type"),
+            }
+            for field_id in PARTY_FIELDS:
+                sources = _eligible_sources(
+                    (item.get("field_provenance") or {}).get(field_id) or []
+                )
+                if item.get(field_id) not in (None, "") and sources:
+                    record[field_id] = item[field_id]
+            eligible_records.append(record)
+        party_records[role] = eligible_records
         party = max(
             matches,
             key=lambda item: (
@@ -1127,6 +1255,8 @@ def project_parties(
                 continue
             values[target] = value
             provenance[target] = deepcopy(sources)
+    if party_records:
+        values["_party_records"] = party_records
     return values, provenance, issues
 
 

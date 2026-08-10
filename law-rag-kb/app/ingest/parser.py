@@ -1,4 +1,7 @@
 """结构化文档解析：PDF / DOCX / TXT / Markdown / 常见图片。"""
+import posixpath
+import re
+import zipfile
 from io import BytesIO
 from pathlib import Path
 
@@ -160,8 +163,90 @@ def _parse_pdf(
     )
 
 
+# 匹配 .rels 里的单个 <Relationship .../> 元素（自闭合或成对）。
+_RELATIONSHIP_RE = re.compile(rb"<Relationship\b[^>]*?(?:/>|>.*?</Relationship>)", re.DOTALL)
+# Target / TargetMode 属性值，单双引号都容忍。
+_TARGET_ATTR_RE = re.compile(rb"""\bTarget\s*=\s*["']([^"']*)["']""")
+_TARGETMODE_ATTR_RE = re.compile(rb"""\bTargetMode\s*=\s*["']([^"']*)["']""")
+
+
+def _rels_base_dir(rels_part_name: str) -> str:
+    """由 .rels 部件路径推出其描述的主件所在目录。
+
+    例如 ``word/_rels/document.xml.rels`` -> ``word``，
+    根级 ``_rels/.rels`` -> ``""``（包根）。
+    """
+    directory, _, filename = rels_part_name.rpartition("/")
+    if filename == ".rels":  # 根级 _rels/.rels，描述整个包
+        return ""
+    # directory 形如 "word/_rels"，主件目录是去掉末尾 "_rels"
+    parent = directory.rsplit("/", 1)[0] if "/" in directory else ""
+    return parent
+
+
+def _sanitize_docx(content: bytes) -> bytes:
+    """剔除 .rels 中指向不存在部件的内部关系引用后重打包。
+
+    部分工具（如 WPS）导出的 docx 会在关系表里保留指向
+    ``userCustomization/customUI.xml`` 等并未实际打进包的部件引用，
+    python-docx 严格校验会直接抛 ``KeyError`` 导致整篇解析失败。
+    这里删掉这些"悬空"关系（外部链接 TargetMode="External" 保留），
+    让 python-docx 能正常打开。无法识别为标准 zip/docx 时原样返回。
+    """
+    try:
+        source = zipfile.ZipFile(BytesIO(content))
+        names = set(source.namelist())
+    except zipfile.BadZipFile:
+        return content
+
+    rewritten: dict[str, bytes] = {}
+    changed = False
+    for name in names:
+        if not name.endswith(".rels"):
+            continue
+        data = source.read(name)
+        base_dir = _rels_base_dir(name)
+
+        def _drop_dangling(match: "re.Match[bytes]") -> bytes:
+            nonlocal changed
+            element = match.group(0)
+            target_mode = _TARGETMODE_ATTR_RE.search(element)
+            if target_mode and target_mode.group(1).decode("utf-8", "replace").lower() == "external":
+                return element  # 外部链接不校验包内是否存在
+            target = _TARGET_ATTR_RE.search(element)
+            if not target:
+                return element
+            target_path = target.group(1).decode("utf-8", "replace")
+            if target_path.startswith("/"):
+                part = target_path.lstrip("/")
+            else:
+                part = posixpath.normpath(posixpath.join(base_dir, target_path)) if base_dir else posixpath.normpath(target_path)
+            if part not in names:
+                changed = True
+                return b""  # 部件缺失，剔除该关系引用
+            return element
+
+        new_data = _RELATIONSHIP_RE.sub(_drop_dangling, data)
+        if new_data != data:
+            rewritten[name] = new_data
+
+    if not changed:
+        return content
+
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as target_zip:
+        for name in source.namelist():
+            target_zip.writestr(name, rewritten.get(name) or source.read(name))
+    return buffer.getvalue()
+
+
 def _parse_docx(content: bytes) -> ParsedDocument:
-    doc = Document(BytesIO(content))
+    try:
+        doc = Document(BytesIO(content))
+    except Exception:
+        # 关系表引用残缺（如 userCustomization/customUI.xml 未入包）时，
+        # 清洗后重试一次；仍失败则原样抛出，交由上层标记 FAILED。
+        doc = Document(BytesIO(_sanitize_docx(content)))
     text_blocks: list[TextBlock] = []
     images: list[ImageAsset] = []
     nodes: list[ContentNode] = []

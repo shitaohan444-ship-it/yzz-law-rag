@@ -7,11 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 
 from app.core.authorization import can_access_document
+from app.core.config import settings
 from app.core.security import Principal, require_service_principal, require_user_principal
 from app.ingest import service as ingest_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 logger = logging.getLogger("uvicorn.error")
+
+
+def require_document_mutations_enabled() -> None:
+    if not settings.rag_document_mutations_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="document mutation service is disabled",
+        )
 
 
 class SourcePromotionRequest(BaseModel):
@@ -38,6 +47,9 @@ class BatchDeleteRequest(BaseModel):
 @router.post("/{doc_id}/ingest")
 def ingest(
     doc_id: Annotated[int, Path(gt=0)],
+    _mutations_enabled: Annotated[
+        None, Depends(require_document_mutations_enabled)
+    ],
     _principal: Annotated[Principal, Depends(require_service_principal)],
     force: bool = False,
     generate_description: bool = True,
@@ -64,6 +76,9 @@ def ingest(
 def promote(
     staging_doc_id: Annotated[int, Path(gt=0)],
     target_doc_id: Annotated[int, Query(gt=0)],
+    _mutations_enabled: Annotated[
+        None, Depends(require_document_mutations_enabled)
+    ],
     _principal: Annotated[Principal, Depends(require_service_principal)],
 ):
     """把已成功入库的隐藏 staging 文档安全提升到原文档 ID。"""
@@ -82,6 +97,9 @@ def promote(
 def promote_source(
     staging_doc_id: Annotated[int, Path(gt=0)],
     req: SourcePromotionRequest,
+    _mutations_enabled: Annotated[
+        None, Depends(require_document_mutations_enabled)
+    ],
     _principal: Annotated[Principal, Depends(require_service_principal)],
 ):
     """把 staging 文档安全追加或替换为目标文档的一个来源。"""
@@ -105,6 +123,9 @@ def promote_source(
 @router.post("/rebuild-sources")
 def rebuild_sources(
     req: SourcesRebuildRequest,
+    _mutations_enabled: Annotated[
+        None, Depends(require_document_mutations_enabled)
+    ],
     _principal: Annotated[Principal, Depends(require_service_principal)],
 ):
     """全部来源成功后，原子替换目标文档的完整 Chunk 集合。"""
@@ -125,6 +146,9 @@ def rebuild_sources(
 @router.post("/batch-delete")
 def batch_delete(
     req: BatchDeleteRequest,
+    _mutations_enabled: Annotated[
+        None, Depends(require_document_mutations_enabled)
+    ],
     _principal: Annotated[Principal, Depends(require_service_principal)],
 ):
     """清理已删除文档的 Milvus chunks、图片记录与对象（幂等）。"""
@@ -149,6 +173,9 @@ def verify_restore(
 @router.delete("/{staging_doc_id}/staging")
 def cleanup_staging(
     staging_doc_id: Annotated[int, Path(gt=0)],
+    _mutations_enabled: Annotated[
+        None, Depends(require_document_mutations_enabled)
+    ],
     _principal: Annotated[Principal, Depends(require_service_principal)],
 ):
     """清理替换失败后残留的 staging 文档、Chunk 与对象。"""

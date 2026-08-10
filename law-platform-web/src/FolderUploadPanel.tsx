@@ -6,6 +6,13 @@ import {
   ingestKnowledgeDocument,
   uploadKnowledgeDocument,
 } from './api';
+import {
+  countdownLabel,
+  FAILURE_DELAY_OPTIONS,
+  failureDelayLabel,
+  loadFailureDelay,
+  saveFailureDelay,
+} from './batchUploadUtils';
 import CategoryCascadeSelect from './CategoryCascadeSelect';
 import { findCategory } from './knowledgeCategories';
 import type { KnowledgeCategoryNode, KnowledgeDocument } from './types';
@@ -122,7 +129,9 @@ export default function FolderUploadPanel({
   const [error, setError] = useState('');
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [failureDelayMs, setFailureDelayMs] = useState(loadFailureDelay);
   const [folderName, setFolderName] = useState('');
+  const [failureWait, setFailureWait] = useState<{ title: string; remainingMs: number } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const control = useRef({ paused: false, stopped: false });
 
@@ -157,6 +166,24 @@ export default function FolderUploadPanel({
     while (control.current.paused && !control.current.stopped) {
       await new Promise((resolve) => window.setTimeout(resolve, 200));
     }
+    return !control.current.stopped;
+  }
+
+  async function waitAfterFailure(title: string, delayMs: number): Promise<boolean> {
+    const deadline = Date.now() + delayMs;
+    for (;;) {
+      if (control.current.stopped) {
+        setFailureWait(null);
+        return false;
+      }
+      if (!control.current.paused) {
+        const remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) break;
+        setFailureWait({ title, remainingMs });
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    }
+    setFailureWait(null);
     return !control.current.stopped;
   }
 
@@ -226,10 +253,13 @@ export default function FolderUploadPanel({
           control.current.stopped = true;
           setError('所选分类已停用，请重新选择。');
           await onCategoryInvalid();
-        } else if (isConnectivityError(itemError)) {
-          control.current.paused = true;
-          setPaused(true);
-          setError('平台连接中断，上传队列已暂停；服务恢复后点击“继续”。');
+        } else {
+          setError(
+            isConnectivityError(itemError)
+              ? `平台连接中断，将在${failureDelayLabel(failureDelayMs)}后自动尝试处理下一份文件。`
+              : '',
+          );
+          if (!(await waitAfterFailure(item.title, failureDelayMs))) break;
         }
       }
     }
@@ -343,6 +373,23 @@ export default function FolderUploadPanel({
         emptyLabel="请选择一级分类"
         className="upload-category-cascade"
       />
+      <label className="failure-delay-setting">
+        <span>处理失败后等待</span>
+        <select
+          aria-label="文件夹上传处理失败后等待时间"
+          value={failureDelayMs}
+          disabled={disabled || running}
+          onChange={(event) => {
+            const next = saveFailureDelay(Number(event.target.value));
+            setFailureDelayMs(next);
+          }}
+        >
+          {FAILURE_DELAY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <small>等待结束后自动处理下一份文件；与批量导入共用此设置。</small>
+      </label>
 
       {items.length > 0 && (
         <div className="batch-file-list">
@@ -375,6 +422,11 @@ export default function FolderUploadPanel({
         <span>停止 {count('stopped')}</span>
         <span>总耗时 {durationLabel(elapsedMs)}</span>
       </div>
+      {failureWait && (
+        <div className="loading-card" role="status">
+          《{failureWait.title}》处理失败，{countdownLabel(failureWait.remainingMs)} 后自动处理下一个；可点击“暂停”或“停止后续任务”中断等待。
+        </div>
+      )}
       {error && <div className="error-card" role="alert">{error}</div>}
       <div className="upload-button-group batch-controls">
         <button

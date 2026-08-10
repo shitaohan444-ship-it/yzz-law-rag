@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/tmp
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      libreoffice-writer \
+      fonts-noto-cjk \
+      fontconfig \
+      poppler-utils \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system renderer \
+    && useradd --system --gid renderer --home-dir /app --shell /usr/sbin/nologin renderer
+
+COPY requirements-renderer.txt .
+RUN python -m pip install --no-cache-dir -r requirements-renderer.txt
+
+COPY app/document_renderer ./app/document_renderer
+
+USER renderer
+EXPOSE 8010
+CMD ["uvicorn", "app.document_renderer.main:app", "--host", "0.0.0.0", "--port", "8010"]

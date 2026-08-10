@@ -17,6 +17,7 @@ from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 from app.api.health import router as health_router
 from app.api.search import router as search_router
+from app.api.legal_research import router as legal_research_router
 from app.api.drafting_lite import router as drafting_lite_router
 from app.core.config import settings
 from app.core.database import engine
@@ -132,5 +133,6 @@ async def production_safety_headers(request: Request, call_next):
 app.include_router(health_router)
 app.include_router(documents_router)
 app.include_router(search_router)
+app.include_router(legal_research_router)
 app.include_router(drafting_lite_router)
 app.include_router(chat_router)

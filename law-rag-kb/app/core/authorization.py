@@ -1,5 +1,6 @@
 """知识库文档和案件的统一授权策略。未知权限级别默认拒绝。"""
 from collections.abc import Iterable
+from datetime import date
 import logging
 
 from sqlalchemy import or_, select
@@ -23,6 +24,11 @@ def authorized_doc_ids(
     *,
     case_id_scope: int | None = None,
     success_only: bool = True,
+    category_ids: list[int] | None = None,
+    knowledge_types: list[str] | None = None,
+    effective_on: date | None = None,
+    effectivity_status: str | None = None,
+    cause_code: str | None = None,
 ) -> list[int] | None:
     """返回允许的 doc_id；服务身份的 None 表示不附加过滤。
 
@@ -38,6 +44,12 @@ def authorized_doc_ids(
             kb_document.c.created_by,
             kb_document.c.case_id,
             kb_document.c.source_type,
+            kb_document.c.category_id,
+            kb_document.c.doc_type,
+            kb_document.c.effective_status,
+            kb_document.c.effective_from,
+            kb_document.c.effective_to,
+            kb_document.c.cause_codes,
         ).where(
             kb_document.c.deleted_at.is_(None),
             kb_document.c.status == "active",
@@ -48,7 +60,26 @@ def authorized_doc_ids(
             if not normalized:
                 return []
             query = query.where(kb_document.c.id.in_(normalized))
+        normalized_categories = _normalize_ids(category_ids)
+        if normalized_categories is not None:
+            if not normalized_categories:
+                return []
+            query = query.where(kb_document.c.category_id.in_(normalized_categories))
+        if knowledge_types:
+            query = query.where(kb_document.c.doc_type.in_(sorted(set(knowledge_types))))
+        if effectivity_status:
+            query = query.where(kb_document.c.effective_status == effectivity_status)
+        if effective_on:
+            query = query.where(
+                or_(kb_document.c.effective_from.is_(None), kb_document.c.effective_from <= effective_on),
+                or_(kb_document.c.effective_to.is_(None), kb_document.c.effective_to >= effective_on),
+            )
         documents = db.execute(query).mappings().all()
+        if cause_code:
+            documents = [
+                row for row in documents
+                if cause_code in (row["cause_codes"] or []) or not (row["cause_codes"] or [])
+            ]
         if principal.is_service:
             return [int(row["id"]) for row in documents]
         case_ids = _accessible_case_ids(db, principal)

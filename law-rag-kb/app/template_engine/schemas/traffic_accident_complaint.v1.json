@@ -15,9 +15,17 @@
     "evidence"
   ],
   "metadata": {
+    "evidence_directory": {"version": "evidence_directory.v1", "enabled": true, "source_field": "document.evidence_list", "inline_mode": "blank", "artifact_type": "evidence_directory"},
     "signature_policy": "user_only",
     "mediation_policy": "user_only",
-    "party_layout": {"version": "party.v1", "supported_roles": ["plaintiff", "defendant"], "max_per_role": 1, "entity_types_by_role": {"plaintiff": ["natural_person"], "defendant": ["natural_person", "organization"]}}
+    "party_layout": {"version": "party.v1", "supported_roles": ["plaintiff", "defendant"], "max_per_role": 1, "entity_types_by_role": {"plaintiff": ["natural_person"], "defendant": ["natural_person", "organization"]}},
+    "request_basis": {
+      "version": "request_basis.v1",
+      "placement": "standalone",
+      "target_field": "document.legal_basis",
+      "claim_fields": ["document.claims"],
+      "fact_fields": "verified_non_party"
+    }
   },
   "fields": [
     {
@@ -906,7 +914,7 @@
       "value_type": "string",
       "required_policy": "required",
       "source_policy": [
-        "material"
+        "evidence"
       ],
       "generation_policy": "draft_with_sources",
       "missing_behavior": "blank",

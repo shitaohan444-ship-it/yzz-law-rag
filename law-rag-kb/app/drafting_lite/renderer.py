@@ -37,7 +37,7 @@ def _safe_name(value: str) -> str:
 
 
 def field_applies_to_party_type(field_id: str, values: dict) -> bool:
-    match = re.match(r"party\.(plaintiff|defendant)\.(.+)", field_id)
+    match = re.match(r"party\.(plaintiff|defendant|third_party)\.(.+)", field_id)
     if not match:
         return True
     role, suffix = match.groups()
@@ -67,6 +67,15 @@ def render(job_id: str, cause: str, values: dict, jobs_root: Path, store) -> tup
         config = CAUSES[cause]
         schema_path = Path(__file__).resolve().parents[1] / "template_engine" / "schemas" / config["schema"]
         schema = load_schema(schema_path)
+        evidence_policy = (schema.metadata or {}).get("evidence_directory") or {}
+        externalized_field = (
+            str(evidence_policy.get("source_field") or "")
+            if evidence_policy.get("enabled") is True
+            and evidence_policy.get("inline_mode") == "blank"
+            else ""
+        )
+        if externalized_field:
+            values[externalized_field] = []
         source = Path(settings.drafting_lite_template_root) / config["template"]
         output_root = jobs_root / job_id / "output"
         output_root.mkdir(parents=True, exist_ok=True)
@@ -75,7 +84,35 @@ def render(job_id: str, cause: str, values: dict, jobs_root: Path, store) -> tup
         # 从 store 读取当前 warnings，用于检测冲突字段并标记红色
         job_state = store.get(job_id)
         current_warnings = job_state.get("warnings") or [] if job_state else []
+
+        # 先完成所有可确定的公共派生和互填，再注入待补充占位符。
+        # 如果顺序相反，占位符本身会被误判为已有值，导致本可填写的字段空缺。
+        for role in ("plaintiff", "defendant", "third_party"):
+            birth_key = f"party.{role}.birth_date"
+            id_key = f"party.{role}.id_number"
+            if values.get(birth_key) or not values.get(id_key):
+                continue
+            id_val = str(values[id_key]).strip()
+            if len(id_val) == 18 and id_val[:17].isdigit():
+                year = id_val[6:10]
+                month = id_val[10:12]
+                day = id_val[12:14]
+                if 1900 <= int(year) <= 2100 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                    values[birth_key] = f"{year}-{month}-{day}"
+
+        for role in ("plaintiff", "defendant", "third_party"):
+            addr_key = f"party.{role}.address"
+            current_key = f"party.{role}.current_address"
+            addr_val = values.get(addr_key)
+            current_val = values.get(current_key)
+            if not addr_val and current_val:
+                values[addr_key] = current_val
+            elif not current_val and addr_val:
+                values[current_key] = addr_val
+
         for field in schema.fields:
+            if field.field_id == externalized_field:
+                continue
             if not field_applies_to_party_type(field.field_id, values):
                 continue
             should_mark_missing = (
@@ -97,32 +134,6 @@ def render(job_id: str, cause: str, values: dict, jobs_root: Path, store) -> tup
                 existing = values[field.field_id]
                 if isinstance(existing, str) and "【冲突值" not in existing:
                     values[field.field_id] = f"{existing}【冲突值，请核对】"
-
-        # 身份证号反推出生日期：第7-14位为YYYYMMDD
-        # 必须在"待补充"占位符注入之前执行，否则占位符会误触发跳过条件
-        for role in ("plaintiff", "defendant"):
-            birth_key = f"party.{role}.birth_date"
-            id_key = f"party.{role}.id_number"
-            if values.get(birth_key) or not values.get(id_key):
-                continue
-            id_val = str(values[id_key]).strip()
-            if len(id_val) == 18 and id_val[:17].isdigit():
-                year = id_val[6:10]
-                month = id_val[10:12]
-                day = id_val[12:14]
-                if 1900 <= int(year) <= 2100 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                    values[birth_key] = f"{year}-{month}-{day}"
-
-        # 住所地与经常居住地互填：一项为空时自动采用另一项的值
-        for role in ("plaintiff", "defendant"):
-            addr_key = f"party.{role}.address"
-            current_key = f"party.{role}.current_address"
-            addr_val = values.get(addr_key)
-            current_val = values.get(current_key)
-            if not addr_val and current_val:
-                values[addr_key] = current_val
-            elif not current_val and addr_val:
-                values[current_key] = addr_val
 
         plaintiff = str(
             values.get("party.plaintiff.name")

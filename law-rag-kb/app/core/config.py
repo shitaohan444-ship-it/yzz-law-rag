@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # 服务间认证与 Web 暴露面。生产环境必须启用认证并配置至少 32 字符随机 Token。
     auth_enabled: bool = False
     rag_service_token: str = ""
+    rag_document_mutations_enabled: bool = True
     auth_admin_role_codes: str = "rag_admin,system_admin,super_admin"
     cors_allowed_origins: str = ""  # 逗号分隔；空值表示不启用浏览器跨域
     trusted_hosts: str = "localhost,127.0.0.1,testserver,rag-api,law-rag-kb"
@@ -93,6 +94,8 @@ class Settings(BaseSettings):
     dense_weight: float = 0.5  # hybrid_ranker=weighted 时 dense 向量权重
     sparse_weight: float = 0.5  # hybrid_ranker=weighted 时 sparse 向量权重
     search_timing_enabled: bool = False  # 输出 /search 各阶段耗时；排障后可关闭
+    # 仅影响搜索/问答响应的官网链接补充；关闭时不访问新增映射表，便于独立回滚。
+    rag_official_links_enabled: bool = False
 
     # 阶段 4 生成链
     llm_provider: str = "stub"  # stub（链路验证，模板答案）/ openai（OpenAI 兼容，DeepSeek/智谱/通义）/ ollama
@@ -115,6 +118,21 @@ class Settings(BaseSettings):
     # False 回退到旧的“纯文本切片 + 独立 image_description 向量”双路流水线。
     kb_markdown_pipeline: bool = True
 
+    # 多 Agent 法律文书工作流
+    legal_drafting_enabled: bool = True
+    legal_drafting_worker_id: str = "legal-drafting-worker-1"
+    legal_drafting_worker_token: str = ""
+    legal_drafting_platform_base_url: str = "http://platform-api:3000"
+    legal_drafting_poll_seconds: float = 3.0
+    legal_drafting_lease_seconds: int = 120
+    legal_drafting_template_root: str = "/templates"
+    legal_drafting_output_root: str = "/tmp/legal-drafting"
+    agent_database_url: str = ""
+    legal_drafting_prompt_version: str = "legal-drafting-v2"
+    legal_drafting_rewrite_limit: int = 2
+    legal_drafting_renderer_url: str = "http://document-renderer:8010"
+    legal_drafting_renderer_token: str = ""
+
     # 独立轻量起诉状生成：不依赖 OA 案件、审批或旧 generation run。
     drafting_lite_enabled: bool = True
     drafting_lite_data_root: str = "/drafting-lite"
@@ -128,7 +146,6 @@ class Settings(BaseSettings):
     drafting_lite_template_root: str = "/templates"
     drafting_lite_renderer_url: str = "http://document-renderer:8010"
     drafting_lite_renderer_token: str = ""
-
 
     @property
     def database_url(self) -> str:

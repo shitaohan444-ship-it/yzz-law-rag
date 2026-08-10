@@ -75,6 +75,7 @@ def _party_binding_candidates(field_id: str, candidates: list) -> list:
     role_markers = {
         "plaintiff": ("原告", "申请人", "起诉人"),
         "defendant": ("被告", "被申请人"),
+        "third_party": ("第三人",),
     }.get(role)
     if not role_markers:
         return candidates
@@ -120,7 +121,12 @@ def _existing_tags(root) -> set[str]:
     return set(root.xpath("//w:sdtPr/w:tag/@w:val", namespaces=NS))
 
 
-def _normalize_layout_noise(root, *, enabled: bool) -> dict[str, int]:
+def _normalize_layout_noise(
+    root,
+    *,
+    enabled: bool,
+    remove_explicit_page_breaks: bool = False,
+) -> dict[str, int]:
     """Remove generator artifacts that create blank pages in the working copy.
 
     The supplied private-lending template carries pageBreakBefore on almost every
@@ -138,6 +144,7 @@ def _normalize_layout_noise(root, *, enabled: bool) -> dict[str, int]:
         return {
             "removed_page_break_before": 0,
             "removed_intermediate_sections": 0,
+            "removed_explicit_page_breaks": 0,
         }
     page_breaks = root.xpath("//w:pPr/w:pageBreakBefore", namespaces=NS)
     for node in page_breaks:
@@ -160,9 +167,23 @@ def _normalize_layout_noise(root, *, enabled: bool) -> dict[str, int]:
                     doc_sectPr.replace(target, deepcopy(source))
     for node in intermediate_sections:
         node.getparent().remove(node)
+    explicit_page_breaks = (
+        [
+            node
+            for node in root.xpath("//w:br", namespaces=NS)
+            if node.get(W + "type") == "page"
+        ]
+        if remove_explicit_page_breaks
+        else []
+    )
+    for node in explicit_page_breaks:
+        parent = node.getparent()
+        if parent is not None:
+            parent.remove(node)
     return {
         "removed_page_break_before": len(page_breaks),
         "removed_intermediate_sections": len(intermediate_sections),
+        "removed_explicit_page_breaks": len(explicit_page_breaks),
     }
 
 
@@ -290,6 +311,67 @@ def _insert_semantic_marker(
     return True
 
 
+def _validate_structured_bindings(tables: list, schema: TemplateSchema) -> None:
+    errors: list[dict] = []
+    for binding in schema.metadata.get("repeat_bindings") or []:
+        if not binding.get("value_field"):
+            continue
+        group = str(binding.get("repeat_group") or binding.get("value_field"))
+        table_index = int(binding.get("table_index", -1))
+        if table_index < 0 or table_index >= len(tables):
+            errors.append({"type": "repeat", "id": group, "reason": "table_not_found"})
+            continue
+        rows = tables[table_index].xpath("./w:tr", namespaces=NS)
+        data_indices = [int(index) for index in binding.get("data_row_indices") or []]
+        prototype_index = int(binding.get("prototype_row_index", -1))
+        if not data_indices or any(index < 0 or index >= len(rows) for index in data_indices):
+            errors.append({"type": "repeat", "id": group, "reason": "data_row_not_found"})
+            continue
+        if prototype_index < 0 or prototype_index >= len(rows):
+            errors.append({"type": "repeat", "id": group, "reason": "prototype_row_not_found"})
+            continue
+        cells = rows[prototype_index].xpath("./w:tc", namespaces=NS)
+        columns = binding.get("columns") or []
+        if not columns or any(
+            int(column.get("index", -1)) < 0
+            or int(column.get("index", -1)) >= len(cells)
+            for column in columns
+        ):
+            errors.append({"type": "repeat", "id": group, "reason": "column_not_found"})
+        summary = binding.get("summary")
+        if isinstance(summary, dict):
+            summary_index = int(summary.get("row_index", -1))
+            if summary_index < 0 or summary_index >= len(rows):
+                errors.append({"type": "repeat", "id": group, "reason": "summary_row_not_found"})
+    layout = schema.metadata.get("party_layout") or {}
+    for block in layout.get("blocks") or []:
+        role = str(block.get("role") or "")
+        entity_type = str(block.get("entity_type") or "")
+        table_index = int(block.get("table_index", -1))
+        anchor = str(block.get("row_anchor") or "")
+        if table_index < 0 or table_index >= len(tables):
+            errors.append(
+                {"type": "party_block", "id": f"{role}.{entity_type}", "reason": "table_not_found"}
+            )
+            continue
+        matches = [
+            row
+            for row in tables[table_index].xpath("./w:tr", namespaces=NS)
+            if anchor in "".join(row.xpath(".//w:t/text()", namespaces=NS))
+        ]
+        if not anchor or len(matches) != 1:
+            errors.append(
+                {
+                    "type": "party_block",
+                    "id": f"{role}.{entity_type}",
+                    "reason": "row_anchor_not_unique",
+                    "matches": len(matches),
+                }
+            )
+    if errors:
+        raise TemplateCompileError(f"structured render bindings invalid: {errors}")
+
+
 def compile_template(
     source_path: str | Path,
     output_path: str | Path,
@@ -307,8 +389,12 @@ def compile_template(
     normalization = _normalize_layout_noise(
         root,
         enabled=bool(schema.metadata.get("normalize_layout_noise")),
+        remove_explicit_page_breaks=bool(
+            schema.metadata.get("remove_explicit_page_breaks")
+        ),
     )
     tables = root.xpath("//w:tbl", namespaces=NS)
+    _validate_structured_bindings(tables, schema)
     existing = _existing_tags(root)
     inserted: list[str] = []
     inserted_sections: list[str] = []
