@@ -134,6 +134,8 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
 
 ## 快速启动
 
+当事人材料驱动的独立起诉状生成页面为 `http://127.0.0.1:5173/drafting-lite`，操作和接口说明见 [当事人材料智能起诉状](docs/drafting-lite.md)。
+
 1. 首次构建并启动整套系统（PostgreSQL、MinIO、Milvus、数据库迁移、RAG API、平台 API 和前端）：
 
    ```powershell
@@ -166,6 +168,8 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
 
 4. 本机使用 `http://127.0.0.1:5173`；同一局域网的电脑使用 `http://服务器局域网IP:5173`。当前前端仅维护电脑端布局。前端容器只把 `/api` 转发到 Docker 内部的 `platform-api:3000`，浏览器不会直连 FastAPI。局域网只需按需放行 Windows 防火墙 TCP 5173，不要开放 3000、8000、5432、6333 或 9000。
 
+当前生产部署为「Win11 主机 + Mac mini 协处理」，通过局域网互联：Win11（`192.168.2.190`）承载前端、平台后端、旧 RAG、PostgreSQL、MinIO、Milvus；Mac mini（`192.168.2.173:18000`）只负责新知识库文档的解析、切片和向量化。OA 局域网访问地址为 `http://192.168.2.190:5173`（同一局域网设备可用）。新文档首次入库（`force=false`）自动交给 Mac mini，其余检索、问答和高级 Mutation 仍由 Win11 旧 RAG 提供。完整架构、路由边界和运维命令见 [Mac mini RAG 局域网运维](docs/Mac-mini-RAG局域网运维.md)。
+
 完成一次 `docker compose up -d --build` 后，开启 Docker Desktop 的“登录时启动”，电脑重启并启动 Docker Desktop 时，所有长期服务会通过 `restart: unless-stopped` 自动恢复，无需再分别运行 `pnpm`。如果曾在 Docker Desktop 中手工停止容器，需要重新执行 `docker compose up -d`。`qwen3.7-plus` 和 `qwen3-vl-plus` 仍由容器通过百炼云端 API 调用，不是在 Docker 内运行的本地模型。
 
 ## 常用访问地址
@@ -180,6 +184,7 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
 | PostgreSQL | localhost:5432 | 关系型数据库 |
 | Milvus gRPC | localhost:19530 | 向量数据库客户端端口（知识库服务连接） |
 | 知识库 RAG API | http://127.0.0.1:8000 | `/ready`、`/health`、`/documents/{id}/ingest`、`/search`、`/chat` |
+| 企微归档管理后台 | `ssh -L 18190:127.0.0.1:18190 wecom-archive` 后访问 localhost:18190/admin | 企业微信聊天归档查看与导出，详见 [使用指南](docs/企业微信归档管理后台使用指南.md) |
 
 ## 环境信息
 
@@ -217,6 +222,37 @@ Milvus 通过 docker 网络内 service 名 `minio:9000` 连接此实例，凭据
 性能实测：顺序 mean=3.126s、P95=4.757s；5 路并发 5/5，wall=17.328s、mean=10.055s；10 路并发 10/10。详见 [RAG完整回归测试报告](docs/RAG完整回归测试报告_2026-07-15.md)。
 
 历史 chapter 维护已完成：文档 3、5、6、8、18 已逐个安全重建，全库“节作为 chapter”归零，检索仍为文档级 15/15、法条级 11/11。详见 [RAG历史数据清理报告](docs/RAG历史数据清理报告_2026-07-15.md)。
+
+## 当前生产部署：Win11 + Mac mini
+
+系统当前为双机部署，通过纯局域网互联：Win11 主机承载主体服务，Mac mini 作为新知识库文档的向量化协处理节点。
+
+| 角色 | 局域网地址 | 职责 |
+|---|---|---|
+| Win11 主机 | `192.168.2.190` | 前端、平台后端、旧 RAG、PostgreSQL、MinIO、Milvus |
+| Mac mini | `192.168.2.173:18000` | 新文档解析、切片、BGE-M3（MPS）Dense/Sparse 向量化 |
+| OA 局域网地址 | `http://192.168.2.190:5173` | 用户访问入口（同一局域网设备可用） |
+| Mac RAG 服务 | `http://192.168.2.173:18000` | 后端接口，**非普通用户操作页面** |
+| Win11 旧 RAG（内部） | `http://rag-api:8000` | Docker 内网地址，检索/问答/高级 Mutation |
+
+新文档入库链路：
+
+```text
+OA 上传新知识库文档
+→ Win11 platform-api
+→ 通过局域网调用 Mac mini
+→ Mac mini 解析 → Mac mini 切片
+→ Mac mini 用 BGE-M3 + MPS 生成 Dense/Sparse 向量
+→ 通过局域网写入 Win11 Milvus
+→ 更新 Win11 PostgreSQL 状态
+→ Win11 旧 RAG 继续提供搜索、聊天和文档读取
+```
+
+路由模式为 `RAG_DOCUMENT_ROUTE_MODE=initial_mac`，`RAG_DOCUMENT_MAC_ALLOWLIST` 为空。Mac mini 只处理 `force=false` 的普通新文档首次 ingest；`force=true`、`promote`、`rebuild-sources`、删除/恢复等高级 Mutation 以及全部检索、问答、Markdown/Chunk 预览仍由 Win11 旧 RAG 提供。**Mac 失败时不会自动回退旧 RAG 处理首次 ingest。**
+
+建议在路由器中为两台机器配置 DHCP 静态租约（绑定 MAC 地址），避免 IP 变化后需手动更新配置。如 IP 已变化，按 [Mac mini RAG 局域网运维](docs/Mac-mini-RAG局域网运维.md) 第 13 节步骤处理。
+
+当前尚未把全部 Mutation 迁移到 Mac；`force=true`、处理中替换原文件、复杂来源替换、`promote`、`rebuild-sources` 和历史整体重建暂不建议使用。详细架构、运维命令、IP 变更处理和回滚方式见 [Mac mini RAG 局域网运维](docs/Mac-mini-RAG局域网运维.md)。
 
 ## 迁移到 Apple Silicon Mac 的注意事项
 
@@ -284,6 +320,9 @@ model = BGEM3FlagModel(
 
 ## 相关文档
 
+- [Mac mini RAG 局域网运维](docs/Mac-mini-RAG局域网运维.md)
+- [企业微信聊天归档管理后台使用指南](docs/企业微信归档管理后台使用指南.md)
+- [企业微信聊天归档服务概览](docs/wecom-archive-overview.md)
 - [公共知识库上传第一版实施报告](docs/公共知识库上传第一版实施报告_2026-07-16.md)
 - [知识库软删除与回收站部署说明](docs/软删除与回收站部署说明_2026-07-20.md)
 - [简单 RAG 前端与局域网测试报告](docs/简单RAG前端与局域网测试报告_2026-07-15.md)

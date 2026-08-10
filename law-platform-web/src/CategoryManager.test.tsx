@@ -224,6 +224,42 @@ describe('CategoryManager', () => {
     expect(await screen.findByText('已选 0 份')).toBeVisible();
   });
 
+  it('filters category documents by title, cascade category and status while retaining batch actions', async () => {
+    const documentUrls: string[] = [];
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('/api/rag/categories')) return jsonResponse(categoryTree);
+      if (url.startsWith('/api/rag/documents?')) {
+        documentUrls.push(url);
+        return jsonResponse({ items: [pendingDocument], total: 1, page: 1, page_size: 5 });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    });
+    renderManager('/knowledge/categories?category_id=9&doc_page=1');
+
+    expect(await screen.findByText('待整理文档')).toBeVisible();
+    fireEvent.change(screen.getByRole('textbox', { name: '按标题筛选' }), {
+      target: { value: '待整理' },
+    });
+    fireEvent.change(screen.getByLabelText('筛选一级分类'), { target: { value: '1' } });
+    fireEvent.change(await screen.findByLabelText('筛选二级分类'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('按状态筛选'), { target: { value: 'failed' } });
+    fireEvent.click(screen.getByRole('button', { name: '筛选' }));
+
+    await waitFor(() => {
+      expect(documentUrls.some((value) => {
+        const params = new URL(value, 'http://localhost').searchParams;
+        return params.get('category_id') === '2'
+          && params.get('keyword') === '待整理'
+          && params.get('status') === 'failed'
+          && params.get('page') === '1';
+      })).toBe(true);
+    });
+    expect(screen.getByText('当前路径：法律法规 / 法律')).toBeVisible();
+    expect(screen.getByRole('button', { name: '批量移动' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '批量删除' })).toBeVisible();
+  });
+
   it('batch moves selected documents via POST /api/rag/documents/batch-move', async () => {
     let moveBody = '';
     fetchMock.mockImplementation(async (input, init) => {

@@ -58,6 +58,8 @@ class SearchHit:
     image_category: str | None = None
     category_id: int | None = None
     category_path: list[str] | None = None
+    official_link: dict[str, str] | None = None
+    official_external_id: str | None = None
 
 
 def search(
@@ -66,6 +68,7 @@ def search(
     doc_ids: list[int] | None = None,
     top_k: int | None = None,
     timings: dict[str, float] | None = None,
+    min_score: float | None = None,
 ) -> list[SearchHit]:
     """检索编排：hybrid 召回 → reranker 精排 → 返回 top_k 片段（含来源）。
 
@@ -105,8 +108,9 @@ def search(
     )
     ranked = sorted(zip(hits, scores), key=lambda x: x[1], reverse=True)
     # 阶段6：阈值过滤弱相关片段（score < rerank_min_score），保底留 top-1 防空结果
-    if settings.rerank_min_score > 0:
-        kept = [rh for rh in ranked if rh[1] >= settings.rerank_min_score]
+    threshold = settings.rerank_min_score if min_score is None else min_score
+    if threshold > 0:
+        kept = [rh for rh in ranked if rh[1] >= threshold]
         ranked = kept or ranked[:1]
 
     result = [
@@ -137,6 +141,9 @@ def search(
             hit.source = category.name
             hit.category_id = category.category_id
             hit.category_path = category.path
+            if category.official_link is not None:
+                hit.official_link = category.official_link.public_dict()
+                hit.official_external_id = category.official_link.external_id
     if timings is not None:
         timings["retrieve_total_ms"] = (perf_counter() - total_started) * 1000
     return result

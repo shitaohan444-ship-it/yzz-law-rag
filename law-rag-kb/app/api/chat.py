@@ -16,6 +16,13 @@ router = APIRouter(tags=["chat"])
 logger = logging.getLogger("uvicorn.error")
 
 
+class OfficialLinkModel(BaseModel):
+    provider: str
+    source_name: str
+    label: str
+    url: str
+
+
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=4000, description="用户问题")
     session_id: str | None = Field(
@@ -48,6 +55,7 @@ class ChatRefModel(BaseModel):
     image_category: str | None = None
     category_id: int | None = None
     category_path: list[str] | None = None
+    official_link: OfficialLinkModel | None = None
     text: str = ""
 
 

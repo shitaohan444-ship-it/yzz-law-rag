@@ -3,7 +3,11 @@ from unittest.mock import MagicMock, patch
 
 from app.ingest import service
 from app.rag import retrieve
-from app.rag.category_resolver import CategoryContext, resolve_document_categories
+from app.rag.category_resolver import (
+    CategoryContext,
+    OfficialLink,
+    resolve_document_categories,
+)
 
 
 def test_resolve_document_categories_returns_recursive_path_context() -> None:
@@ -30,6 +34,68 @@ def test_resolve_document_categories_returns_recursive_path_context() -> None:
     assert result[35].doc_title == "最新文档标题"
     assert result[35].path == ["律所工作资料", "技术部"]
     assert result[35].path_ids == [3, 13]
+    assert result[35].official_link is None
+
+
+def test_resolve_document_categories_adds_one_valid_official_link_join() -> None:
+    external_id = "0123456789abcdef0123456789abcdef"
+    session = MagicMock()
+    session.execute.return_value.mappings.return_value.all.return_value = [
+        {
+            "doc_id": 35,
+            "doc_title": "某法律",
+            "category_id": 8,
+            "category_name": "法律",
+            "path": ["法律法规", "法律"],
+            "path_ids": [1, 8],
+            "effective_sensitive": False,
+            "official_provider": "npc_flk",
+            "official_external_id": external_id,
+            "official_url": f"https://flk.npc.gov.cn/detail?id={external_id}",
+        }
+    ]
+    context_manager = MagicMock()
+    context_manager.__enter__.return_value = session
+    context_manager.__exit__.return_value = False
+
+    with (
+        patch("app.rag.category_resolver.SessionLocal", return_value=context_manager),
+        patch("app.rag.category_resolver.settings.rag_official_links_enabled", True),
+    ):
+        result = resolve_document_categories([35])
+
+    assert result[35].official_link is not None
+    assert result[35].official_link.label == "官网最新版"
+    sql = str(session.execute.call_args.args[0])
+    assert "kb_document_regulation_link" in sql
+    assert session.execute.call_count == 1
+
+
+def test_invalid_official_url_is_not_returned() -> None:
+    session = MagicMock()
+    session.execute.return_value.mappings.return_value.all.return_value = [
+        {
+            "doc_id": 35,
+            "doc_title": "某法律",
+            "category_id": 8,
+            "category_name": "法律",
+            "path": ["法律法规", "法律"],
+            "path_ids": [1, 8],
+            "effective_sensitive": False,
+            "official_provider": "npc_flk",
+            "official_external_id": "0123456789abcdef0123456789abcdef",
+            "official_url": "javascript:alert(1)",
+        }
+    ]
+    context_manager = MagicMock()
+    context_manager.__enter__.return_value = session
+    context_manager.__exit__.return_value = False
+    with (
+        patch("app.rag.category_resolver.SessionLocal", return_value=context_manager),
+        patch("app.rag.category_resolver.settings.rag_official_links_enabled", True),
+    ):
+        result = resolve_document_categories([35])
+    assert result[35].official_link is None
 
 
 def test_new_chunk_metadata_contains_category_id_and_full_path() -> None:
@@ -83,6 +149,13 @@ def test_search_hydrates_latest_document_title_without_reembedding() -> None:
         path=["律所工作资料", "技术部"],
         path_ids=[3, 13],
         effective_sensitive=False,
+        official_link=OfficialLink(
+            provider="npc_flk",
+            source_name="国家法律法规数据库",
+            label="官网最新版",
+            url="https://flk.npc.gov.cn/detail?id=0123456789abcdef0123456789abcdef",
+            external_id="0123456789abcdef0123456789abcdef",
+        ),
     )
 
     with (
@@ -95,3 +168,9 @@ def test_search_hydrates_latest_document_title_without_reembedding() -> None:
 
     assert hits[0].doc_title == "最新文档标题"
     assert hits[0].text == "测试正文"
+    assert hits[0].official_link == {
+        "provider": "npc_flk",
+        "source_name": "国家法律法规数据库",
+        "label": "官网最新版",
+        "url": "https://flk.npc.gov.cn/detail?id=0123456789abcdef0123456789abcdef",
+    }

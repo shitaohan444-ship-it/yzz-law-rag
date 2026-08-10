@@ -51,3 +51,15 @@ Desktop.ini
 
 # Tool caches
 .playwright-cli/
+.codex-plan-review/
+/tmp/
+artifacts/legal-drafting/alembic-upgrade.sql
+*.legacy-source.doc
+
+# Local acceptance output, deployment snapshots, and point-in-time backups
+/artifacts/
+/docker-compose.yml.bak-*
+
+# Accidental duplicate created outside the Python package tree
+/law-rag-kb/appdrafting_litelocality.py
+.env.backup*

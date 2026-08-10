@@ -1,4 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+} from '@nestjs/common';
 import { MinioService } from '../../core/minio/minio.service';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { RagService } from '../rag/rag.service';
@@ -345,6 +349,7 @@ describe('KnowledgeDocumentsService', () => {
       deleteFile: jest.fn(),
     };
     const rag = {
+      createDocumentRequestId: jest.fn().mockReturnValue('req-replace'),
       ingestDocument: jest.fn().mockResolvedValue({ status: 'success' }),
       promoteDocument: jest.fn().mockResolvedValue({ chunk_count: 4 }),
       cleanupStagingDocument: jest.fn(),
@@ -379,8 +384,11 @@ describe('KnowledgeDocumentsService', () => {
       }),
     );
     /* eslint-enable @typescript-eslint/no-unsafe-assignment */
-    expect(rag.ingestDocument).toHaveBeenCalledWith('41', true);
-    expect(rag.promoteDocument).toHaveBeenCalledWith('41', '30');
+    expect(rag.ingestDocument).toHaveBeenCalledWith('41', true, {
+      routingDocId: '30',
+      requestId: 'req-replace',
+    });
+    expect(rag.promoteDocument).toHaveBeenCalledWith('41', '30', 'req-replace');
     expect(rag.cleanupStagingDocument).not.toHaveBeenCalled();
   });
 
@@ -466,6 +474,7 @@ describe('KnowledgeDocumentsService', () => {
       deleteFile: jest.fn(),
     };
     const rag = {
+      createDocumentRequestId: jest.fn().mockReturnValue('req-append'),
       ingestDocument: jest.fn().mockResolvedValue({ status: 'success' }),
       promoteSource: jest.fn().mockResolvedValue({ chunk_count: 5 }),
       cleanupStagingDocument: jest.fn(),
@@ -494,6 +503,7 @@ describe('KnowledgeDocumentsService', () => {
         targetDocId: '30',
         sourceId: '82',
         mode: 'append',
+        requestId: 'req-append',
       }),
     );
     expect(rag.cleanupStagingDocument).not.toHaveBeenCalled();
@@ -808,6 +818,7 @@ describe('KnowledgeDocumentsService', () => {
     const storage = { fileExists: jest.fn().mockResolvedValue(true) };
     const rag = {
       verifyRestoreDocuments: jest.fn().mockResolvedValue({
+        request_id: 'req-restore',
         items: [
           { doc_id: 10, ok: true, missing_chunks: 0, missing_images: [] },
         ],
@@ -823,6 +834,7 @@ describe('KnowledgeDocumentsService', () => {
     await expect(service.batchRestore({ doc_ids: ['10'] })).resolves.toEqual({
       restored: 1,
       doc_ids: ['10'],
+      request_id: 'req-restore',
     });
     expect(tx.$executeRaw).toHaveBeenCalledTimes(3);
   });
@@ -868,6 +880,7 @@ describe('KnowledgeDocumentsService', () => {
     const storage = { fileExists: jest.fn().mockResolvedValue(true) };
     const rag = {
       verifyRestoreDocuments: jest.fn().mockResolvedValue({
+        request_id: 'req-restore-failed',
         items: [
           { doc_id: 10, ok: false, missing_chunks: 1, missing_images: [] },
         ],
@@ -922,7 +935,7 @@ describe('KnowledgeDocumentsService', () => {
     };
     const storage = { deleteFile: jest.fn().mockResolvedValue(undefined) };
     const rag = {
-      batchDeleteDocuments: jest.fn().mockResolvedValue(undefined),
+      batchDeleteDocuments: jest.fn().mockResolvedValue('req-purge'),
     };
     const service = new KnowledgeDocumentsService(
       prisma as unknown as PrismaService,
@@ -934,6 +947,7 @@ describe('KnowledgeDocumentsService', () => {
     await expect(service.batchPurge({ doc_ids: ['10'] })).resolves.toEqual({
       purged: 1,
       already_purged: 0,
+      request_id: 'req-purge',
     });
     expect(rag.batchDeleteDocuments).toHaveBeenCalledWith(['10']);
     expect(tx.$executeRaw).toHaveBeenCalledTimes(3);
@@ -961,5 +975,66 @@ describe('KnowledgeDocumentsService', () => {
     });
     expect(rag.batchDeleteDocuments).not.toHaveBeenCalled();
     expect(tx.$executeRaw).not.toHaveBeenCalled();
+  });
+
+  it('preserves sanitized upstream errors and request ids in composite operations', () => {
+    const service = new KnowledgeDocumentsService(
+      {} as PrismaService,
+      {} as MinioService,
+      {} as RagService,
+      categoryService(),
+    );
+    const rethrower = service as unknown as {
+      rethrowSourceError(
+        error: unknown,
+        message: string,
+        requestId: string,
+      ): never;
+    };
+    const loggerError = jest
+      .spyOn(
+        (
+          service as unknown as {
+            logger: { error(message: string): void };
+          }
+        ).logger,
+        'error',
+      )
+      .mockImplementation(() => undefined);
+    const upstream = new HttpException(
+      {
+        code: 'RAG_REQUEST_REJECTED',
+        message: '文档处理服务暂不可用',
+        request_id: 'req-upstream',
+      },
+      503,
+    );
+
+    expect(() =>
+      rethrower.rethrowSourceError(upstream, '安全摘要', 'req-upstream'),
+    ).toThrow(upstream);
+
+    let caught: unknown;
+    try {
+      rethrower.rethrowSourceError(
+        new Error(String.raw`C:\private\case.pdf postgres://password@db`),
+        '源文件处理失败',
+        'req-local',
+      );
+    } catch (error: unknown) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ConflictException);
+    expect(caught).toMatchObject({
+      response: {
+        code: 'RAG_DOCUMENT_OPERATION_FAILED',
+        message: '源文件处理失败',
+        request_id: 'req-local',
+      },
+    });
+    expect(JSON.stringify(caught)).not.toMatch(/private|postgres|password/i);
+    expect(loggerError).toHaveBeenCalledWith(
+      expect.stringMatching(/private.*postgres.*password/i),
+    );
   });
 });

@@ -110,7 +110,22 @@ RAG_API_BASE_URL=http://127.0.0.1:8000
 RAG_API_TIMEOUT_MS=120000
 RAG_INGEST_TIMEOUT_MS=900000
 RAG_SERVICE_TOKEN=
+RAG_DOCUMENT_API_BASE_URL=
+RAG_DOCUMENT_SERVICE_TOKEN=
+RAG_DOCUMENT_ROUTE_MODE=allowlist
+RAG_DOCUMENT_MAC_ALLOWLIST=
 ```
+
+文档Mutation路由模式：
+
+- `legacy`：全部使用查询RAG。
+- `allowlist`：只有`RAG_DOCUMENT_MAC_ALLOWLIST`中的文档使用独立文档服务；未配置模式时采用此兼容行为。
+- `initial_mac`：仅`force=false`的首次或普通ingest使用独立文档服务；`force=true`以及promote、promote-source、rebuild、删除和恢复校验仍使用查询RAG。
+- `mac`：所有文档Mutation使用独立文档服务，保留给完整迁移阶段。
+
+文档状态、Markdown、Chunk预览以及搜索、聊天始终使用`RAG_API_BASE_URL`。文档服务失败不会自动回退查询RAG。
+
+**当前生产口径**：`RAG_DOCUMENT_ROUTE_MODE=initial_mac`，`RAG_DOCUMENT_MAC_ALLOWLIST` 为空，`RAG_DOCUMENT_API_BASE_URL` 指向 Mac mini 文档服务（`http://192.168.2.173:18000`，局域网地址）。即只有 `force=false` 的普通新文档首次 ingest 由 Mac mini 处理，其余 Mutation 与全部读取/检索仍走 Win11 旧 RAG（`RAG_API_BASE_URL`，Docker 内网 `http://rag-api:8000`）。Mac 失败不会自动回退旧 RAG 处理首次 ingest。完整路由边界、运维命令与回滚方式见 [Mac mini RAG 局域网运维](../docs/Mac-mini-RAG局域网运维.md)。
 
 本地开发时 `HOST` 默认是 `127.0.0.1`，由同机 Vite 代理访问，不要为了局域网前端而改成 `0.0.0.0`；Docker 会在容器内部单独覆盖为 `0.0.0.0`。开发模式关闭 FastAPI 鉴权时，`RAG_SERVICE_TOKEN` 可以留空。启用 FastAPI 鉴权后，令牌只保存在平台后端或根 Compose 环境中，禁止写入前端 `VITE_` 变量。当前局域网验收版没有登录功能，因此 FastAPI 应保持开发兼容模式；生产启用鉴权前必须先补齐平台用户身份注入。
 

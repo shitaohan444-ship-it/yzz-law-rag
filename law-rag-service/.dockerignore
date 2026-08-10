@@ -6,7 +6,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 data/
-scripts/
+scripts/*
+!scripts/import_legal_regulation_catalog.py
 tests/
 requirements-lock.txt
 *.log

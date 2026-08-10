@@ -7,6 +7,8 @@ import { AttachmentModule } from './modules/attachments/attachment.module';
 import { CaseMaterialsModule } from './modules/case-materials/case-materials.module';
 import { RagModule } from './modules/rag/rag.module';
 import { KnowledgeDocumentsModule } from './modules/knowledge-documents/knowledge-documents.module';
+import { LegalDraftingModule } from './modules/legal-drafting/legal-drafting.module';
+import { DraftingLiteModule } from './modules/drafting-lite/drafting-lite.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { KnowledgeDocumentsModule } from './modules/knowledge-documents/knowledg
     CaseMaterialsModule,
     RagModule,
     KnowledgeDocumentsModule,
+    LegalDraftingModule,
+    DraftingLiteModule,
   ],
 })
 export class AppModule {}

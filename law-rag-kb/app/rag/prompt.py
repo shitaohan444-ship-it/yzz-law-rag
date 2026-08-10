@@ -59,6 +59,10 @@ def build_refs(hits: list[SearchHit]) -> list[dict]:
             "image_category": h.image_category,
             "category_id": h.category_id,
             "category_path": h.category_path,
+            # Structured citation metadata only.  build_prompt deliberately
+            # does not include this URL, so the LLM cannot treat it as evidence.
+            "official_link": h.official_link,
+            "official_regulation_id": h.official_external_id,
             "text": h.text,
         }
         for i, h in enumerate(hits, 1)

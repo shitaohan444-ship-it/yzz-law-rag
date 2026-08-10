@@ -1,0 +1,297 @@
+{
+  "schema_id": "invention_patent_infringement_complaint.v1",
+  "version": "1.0.0",
+  "template_code": "civil_complaint.invention_patent_infringement",
+  "document_type": "civil_complaint",
+  "cause_code": "invention_patent_infringement",
+  "party_role": "plaintiff",
+  "source_path": "起诉状/要素式侵害发明专利权纠纷起诉状.docx",
+  "parser_version": "template-compiler-v1",
+  "sections": ["parties", "claims", "jurisdiction", "facts", "liability", "authorities", "evidence", "technical_comparison", "related_proceedings"],
+  "metadata": {
+    "evidence_directory": {"version": "evidence_directory.v1", "enabled": true, "source_field": "document.evidence_list", "inline_mode": "blank", "artifact_type": "evidence_directory"},
+    "mvp_party_limit": 20,
+    "party_layout": {
+      "version": "party.v1",
+      "supported_roles": ["plaintiff", "defendant", "third_party"],
+      "max_per_role": 20,
+      "entity_types_by_role": {
+        "plaintiff": ["natural_person", "organization"],
+        "defendant": ["natural_person", "organization"],
+        "third_party": ["natural_person", "organization"]
+      },
+      "blocks": [
+        {"role": "plaintiff", "entity_type": "natural_person", "table_index": 0, "row_anchor": "原告（自然人）"},
+        {"role": "plaintiff", "entity_type": "organization", "table_index": 0, "row_anchor": "原告（法人、非法人组织）"},
+        {"role": "defendant", "entity_type": "natural_person", "table_index": 0, "row_anchor": "被告（自然人）"},
+        {"role": "defendant", "entity_type": "organization", "table_index": 0, "row_anchor": "被告（法人、非法人组织）"},
+        {"role": "third_party", "entity_type": "natural_person", "table_index": 0, "row_anchor": "第三人（自然人）"},
+        {"role": "third_party", "entity_type": "organization", "table_index": 0, "row_anchor": "第三人（法人、非法人组织）"}
+      ]
+    },
+    "signature_policy": "user_only",
+    "mediation_policy": "user_only",
+    "normalize_layout_noise": true,
+    "request_basis": {
+      "version": "request_basis.v1",
+      "placement": "standalone",
+      "target_field": "document.legal_basis",
+      "claim_fields": ["document.claims"],
+      "fact_fields": "verified_non_party"
+    },
+    "section_bindings": {
+      "parties": {"table_index": 0, "anchor": "当事人信息"},
+      "claims": {"table_index": 0, "anchor": "诉讼请求", "occurrence": 0},
+      "jurisdiction": {"table_index": 0, "anchor": "约定管辖和诉前保全"},
+      "facts": {"table_index": 0, "anchor": "事实与理由", "occurrence": 0},
+      "liability": {"table_index": 0, "anchor": "责任承担"},
+      "authorities": {"table_index": 0, "anchor": "5.法律依据"},
+      "evidence": {"table_index": 1, "anchor": "编号"},
+      "technical_comparison": {"table_index": 2, "anchor": "序号"},
+      "related_proceedings": {"table_index": 4, "anchor": "无效宣告请求人"}
+    },
+    "field_item_schemas": {
+      "document.evidence_list": {
+        "type": "array",
+        "items": {"number":"编号","page_no":"材料页码","evidence_name":"证据名称","source":"证据来源","proof_purpose":"拟证明事项"}
+      },
+      "patent.independent_claim_features": {
+        "type": "array",
+        "items": {"sequence":"序号","patent_feature":"涉案专利技术特征","accused_feature":"被诉产品相应技术特征","means_comparison":"手段对比及说明","function_comparison":"功能对比及说明","effect_comparison":"效果对比及说明","obviousness_explanation":"是否容易联想到及说明","result":"相同、等同或不相同"}
+      },
+      "patent.dependent_claim_features": {
+        "type": "array",
+        "items": {"sequence":"序号","patent_feature":"涉案专利技术特征","accused_feature":"被诉产品相应技术特征","means_comparison":"手段对比及说明","function_comparison":"功能对比及说明","effect_comparison":"效果对比及说明","obviousness_explanation":"是否容易联想到及说明","result":"相同、等同或不相同"}
+      },
+      "patent.validity_proceedings": {
+        "type": "array",
+        "items": {"sequence":"序号","requester":"无效宣告请求人","request_and_reasons":"无效请求和理由","decision_and_date":"审查决定及时间","decision_result":"审查决定结论","administrative_action":"是否提起行政诉讼","first_instance_case_no":"一审案号","first_instance_parties":"一审当事人及代理人","claims":"一审诉讼请求","first_instance_result":"一审结果","first_instance_date":"一审日期","second_instance_case_no":"二审案号","second_instance_parties":"二审当事人及代理人","second_instance_result":"二审结果","second_instance_date":"二审日期"}
+      },
+      "patent.related_civil_cases": {
+        "type": "array",
+        "items": {"sequence":"序号","cause":"案由","first_instance_court_case_no":"一审法院及案号","claims":"诉讼请求","first_instance_parties":"一审当事人及代理人","summary":"简要案情","first_instance_date":"一审日期","first_instance_result":"一审结果","second_instance_court_case_no":"二审法院及案号","second_instance_parties":"二审当事人及代理人","second_instance_date":"二审日期","second_instance_result":"二审结果"}
+      }
+    },
+    "repeat_bindings": [
+      {
+        "repeat_group": "patent_evidence_items",
+        "value_field": "document.evidence_list",
+        "table_index": 1,
+        "anchor": "编号",
+        "data_row_indices": [2, 3, 4, 6, 7, 8, 10, 11, 13],
+        "prototype_row_index": 13,
+        "columns": [
+          {"index":0,"keys":["number","evidence_no"],"auto_number":true},
+          {"index":1,"keys":["page_no","page"]},
+          {"index":2,"keys":["evidence_name","name"],"fallback":true},
+          {"index":3,"keys":["source","source_from"]},
+          {"index":4,"keys":["proof_purpose","purpose"]}
+        ]
+      },
+      {
+        "repeat_group": "independent_claim_feature_items",
+        "value_field": "patent.independent_claim_features",
+        "table_index": 2,
+        "anchor": "序号",
+        "data_row_indices": [1, 2],
+        "prototype_row_index": 2,
+        "columns": [
+          {"index":0,"keys":["sequence","number"],"auto_number":true},
+          {"index":1,"keys":["patent_feature"],"fallback":true},
+          {"index":2,"keys":["accused_feature"]},
+          {"index":3,"keys":["means_comparison"]},
+          {"index":4,"keys":["function_comparison"]},
+          {"index":5,"keys":["effect_comparison"]},
+          {"index":6,"keys":["obviousness_explanation","conceivability"]},
+          {"index":7,"keys":["result","comparison_result"]}
+        ]
+      },
+      {
+        "repeat_group": "dependent_claim_feature_items",
+        "value_field": "patent.dependent_claim_features",
+        "table_index": 3,
+        "anchor": "序号",
+        "data_row_indices": [1, 2],
+        "prototype_row_index": 2,
+        "columns": [
+          {"index":0,"keys":["sequence","number"],"auto_number":true},
+          {"index":1,"keys":["patent_feature"],"fallback":true},
+          {"index":2,"keys":["accused_feature"]},
+          {"index":3,"keys":["means_comparison"]},
+          {"index":4,"keys":["function_comparison"]},
+          {"index":5,"keys":["effect_comparison"]},
+          {"index":6,"keys":["obviousness_explanation","conceivability"]},
+          {"index":7,"keys":["result","comparison_result"]}
+        ]
+      },
+      {
+        "repeat_group": "patent_validity_proceeding_items",
+        "value_field": "patent.validity_proceedings",
+        "table_index": 4,
+        "anchor": "无效宣告请求人",
+        "data_row_indices": [2],
+        "prototype_row_index": 2,
+        "summary": {
+          "row_index": 0,
+          "template": "专利名称：{patent_name}；专利号：{patent_number}；专利权人/被许可人：{right_holder}；统计期间：截至{statistics_period}；统计时间：{statistics_date}",
+          "fields": {
+            "patent_name": "patent.name",
+            "patent_number": "patent.number",
+            "right_holder": ["party.plaintiff.organization_name", "party.plaintiff.name"],
+            "statistics_period": "patent.validity_statistics_period",
+            "statistics_date": "patent.validity_statistics_date"
+          }
+        },
+        "columns": [
+          {"index":0,"keys":["sequence","number"],"auto_number":true},
+          {"index":1,"keys":["requester"],"fallback":true},
+          {"index":2,"keys":["request_and_reasons"]},
+          {"index":3,"keys":["decision_and_date"]},
+          {"index":4,"keys":["decision_result"]},
+          {"index":5,"keys":["administrative_action"]},
+          {"index":6,"keys":["first_instance_case_no"]},
+          {"index":7,"keys":["first_instance_parties"]},
+          {"index":8,"keys":["claims"]},
+          {"index":9,"keys":["first_instance_result"]},
+          {"index":10,"keys":["first_instance_date"]},
+          {"index":11,"keys":["second_instance_case_no"]},
+          {"index":12,"keys":["second_instance_parties"]},
+          {"index":13,"keys":["second_instance_result"]},
+          {"index":14,"keys":["second_instance_date"]}
+        ]
+      },
+      {
+        "repeat_group": "patent_related_civil_case_items",
+        "value_field": "patent.related_civil_cases",
+        "table_index": 5,
+        "anchor": "序号",
+        "data_row_indices": [3],
+        "prototype_row_index": 3,
+        "summary": {
+          "row_index": 1,
+          "template": "专利名称：{patent_name}；专利号：{patent_number}；专利权人/被许可人：{right_holder}；被诉侵权产品名称：{accused_product}；统计期间：截至{statistics_period}；统计时间：{statistics_date}",
+          "fields": {
+            "patent_name": "patent.name",
+            "patent_number": "patent.number",
+            "right_holder": ["party.plaintiff.organization_name", "party.plaintiff.name"],
+            "accused_product": "patent.accused_product",
+            "statistics_period": "patent.civil_statistics_period",
+            "statistics_date": "patent.civil_statistics_date"
+          }
+        },
+        "columns": [
+          {"index":0,"keys":["sequence","number"],"auto_number":true},
+          {"index":1,"keys":["cause"],"fallback":true},
+          {"index":2,"keys":["first_instance_court_case_no"]},
+          {"index":3,"keys":["claims"]},
+          {"index":4,"keys":["first_instance_parties"]},
+          {"index":5,"keys":["summary"]},
+          {"index":6,"keys":["first_instance_date"]},
+          {"index":7,"keys":["first_instance_result"]},
+          {"index":8,"keys":["second_instance_court_case_no"]},
+          {"index":9,"keys":["second_instance_parties"]},
+          {"index":10,"keys":["second_instance_date"]},
+          {"index":11,"keys":["second_instance_result"]}
+        ]
+      }
+    ],
+    "ai_draft_notice": "AI 自动生成，请核对材料与内容后使用"
+  },
+  "fields": [
+    {"field_id":"party.plaintiff.name","label":"原告姓名","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"personal","binding":{"table_index":0,"anchor":"姓名：","mode":"text"}},
+    {"field_id":"party.plaintiff.gender","label":"原告性别","value_type":"enum","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"性别：","mode":"checkbox"}},
+    {"field_id":"party.plaintiff.birth_date","label":"原告出生日期","value_type":"date","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"personal","binding":{"table_index":0,"anchor":"出生日期：","mode":"text"}},
+    {"field_id":"party.plaintiff.ethnicity","label":"原告民族","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"民族：","mode":"text"}},
+    {"field_id":"party.plaintiff.phone","label":"原告联系电话","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"联系电话：","mode":"text"}},
+    {"field_id":"party.plaintiff.address","label":"原告住所地","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"住所地（户籍所在地）：","mode":"text"}},
+    {"field_id":"party.plaintiff.current_address","label":"原告经常居住地","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"经常居住地：","mode":"text"}},
+    {"field_id":"party.plaintiff.id_type","label":"原告证件类型","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"证件类型：","mode":"text"}},
+    {"field_id":"party.plaintiff.id_number","label":"原告证件号码","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"证件号码：","mode":"text"}},
+    {"field_id":"party.plaintiff.organization_name","label":"原告组织名称","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"personal","binding":{"table_index":0,"anchor":"名称：","mode":"text"}},
+    {"field_id":"party.plaintiff.organization_address","label":"原告组织住所地","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"住所地（主要办事机构所在地）：","mode":"text"}},
+    {"field_id":"party.plaintiff.organization_registration_address","label":"原告组织注册地","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"注册地/登记地：","mode":"text"}},
+    {"field_id":"party.plaintiff.organization_phone","label":"原告组织联系电话","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"联系电话：","mode":"text"}},
+    {"field_id":"party.plaintiff.unified_social_credit_code","label":"原告统一社会信用代码","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"统一社会信用代码：","mode":"text"}},
+    {"field_id":"party.plaintiff.legal_representative","label":"原告法定代表人或负责人","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"法定代表人/主要负责人：","mode":"text"}},
+
+    {"field_id":"party.defendant.name","label":"被告姓名","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"personal","binding":{"table_index":0,"anchor":"姓名：","mode":"text"}},
+    {"field_id":"party.defendant.gender","label":"被告性别","value_type":"enum","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"性别：","mode":"checkbox"}},
+    {"field_id":"party.defendant.birth_date","label":"被告出生日期","value_type":"date","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"personal","binding":{"table_index":0,"anchor":"出生日期：","mode":"text"}},
+    {"field_id":"party.defendant.ethnicity","label":"被告民族","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"民族：","mode":"text"}},
+    {"field_id":"party.defendant.phone","label":"被告联系电话","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"联系电话：","mode":"text"}},
+    {"field_id":"party.defendant.address","label":"被告住所地","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"住所地（户籍所在地）：","mode":"text"}},
+    {"field_id":"party.defendant.current_address","label":"被告经常居住地","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"经常居住地：","mode":"text"}},
+    {"field_id":"party.defendant.id_type","label":"被告证件类型","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"证件类型：","mode":"text"}},
+    {"field_id":"party.defendant.id_number","label":"被告证件号码","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"证件号码：","mode":"text"}},
+    {"field_id":"party.defendant.organization_name","label":"被告组织名称","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"personal","binding":{"table_index":0,"anchor":"名称：","mode":"text"}},
+    {"field_id":"party.defendant.organization_address","label":"被告组织住所地","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"住所地（主要办事机构所在地）：","mode":"text"}},
+    {"field_id":"party.defendant.organization_registration_address","label":"被告组织注册地","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"注册地/登记地：","mode":"text"}},
+    {"field_id":"party.defendant.organization_phone","label":"被告组织联系电话","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"联系电话：","mode":"text"}},
+    {"field_id":"party.defendant.unified_social_credit_code","label":"被告统一社会信用代码","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"统一社会信用代码：","mode":"text"}},
+    {"field_id":"party.defendant.legal_representative","label":"被告法定代表人或负责人","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"法定代表人/主要负责人：","mode":"text"}},
+
+    {"field_id":"party.third_party.name","label":"第三人姓名","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"personal","binding":{"table_index":0,"anchor":"姓名：","mode":"text"}},
+    {"field_id":"party.third_party.gender","label":"第三人性别","value_type":"enum","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"性别：","mode":"checkbox"}},
+    {"field_id":"party.third_party.birth_date","label":"第三人出生日期","value_type":"date","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"personal","binding":{"table_index":0,"anchor":"出生日期：","mode":"text"}},
+    {"field_id":"party.third_party.ethnicity","label":"第三人民族","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"民族：","mode":"text"}},
+    {"field_id":"party.third_party.phone","label":"第三人联系电话","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"联系电话：","mode":"text"}},
+    {"field_id":"party.third_party.address","label":"第三人住所地","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"住所地（户籍所在地）：","mode":"text"}},
+    {"field_id":"party.third_party.current_address","label":"第三人经常居住地","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"经常居住地：","mode":"text"}},
+    {"field_id":"party.third_party.id_type","label":"第三人证件类型","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"证件类型：","mode":"text"}},
+    {"field_id":"party.third_party.id_number","label":"第三人证件号码","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"证件号码：","mode":"text"}},
+    {"field_id":"party.third_party.organization_name","label":"第三人组织名称","value_type":"string","required_policy":"optional","source_policy":["oa","material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"personal","binding":{"table_index":0,"anchor":"名称：","mode":"text"}},
+    {"field_id":"party.third_party.organization_address","label":"第三人组织住所地","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"住所地（主要办事机构所在地）：","mode":"text"}},
+    {"field_id":"party.third_party.organization_registration_address","label":"第三人组织注册地","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"注册地/登记地：","mode":"text"}},
+    {"field_id":"party.third_party.organization_phone","label":"第三人组织联系电话","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"联系电话：","mode":"text"}},
+    {"field_id":"party.third_party.unified_social_credit_code","label":"第三人统一社会信用代码","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","sensitivity":"sensitive","binding":{"table_index":0,"anchor":"统一社会信用代码：","mode":"text"}},
+    {"field_id":"party.third_party.legal_representative","label":"第三人法定代表人或负责人","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","sensitivity":"personal","binding":{"table_index":0,"anchor":"法定代表人/主要负责人：","mode":"text"}},
+
+    {"field_id":"document.claims","label":"完整诉讼请求","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"（可完整表述诉讼请求","mode":"multiline","append_paragraph":true}},
+    {"field_id":"claims.stop_infringement","label":"停止专利侵权请求","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"1.停止侵害","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"claims.economic_loss","label":"经济损失及惩罚性赔偿请求","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"2.赔偿经济损失","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"claims.reasonable_expenses","label":"维权合理开支请求","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"3.赔偿维权合理开支","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"claims.joint_liability","label":"连带责任请求","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"4.连带责任","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"claims.delayed_performance_penalty","label":"非金钱给付义务迟延履行金请求","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"5.非金钱给付义务迟延履行金","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"claims.litigation_costs","label":"诉讼费用请求","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"6.是否主张诉讼费用","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"claims.other","label":"其他诉讼请求","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"7.其他请求","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"jurisdiction.agreement","label":"仲裁或法院管辖约定","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"1.有无仲裁、法院管辖约定","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"patent.pre_litigation_preservation","label":"诉前保全情况","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"2.是否已经诉前保全","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"patent.foreign_related","label":"涉外情况","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","binding":{"table_index":0,"anchor":"1.是否涉外","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"patent.hk_macao_taiwan_related","label":"涉港澳台情况","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"blank","binding":{"table_index":0,"anchor":"2.是否涉港澳台","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"document.facts_and_reasons","label":"事实与理由","value_type":"string","required_policy":"required","source_policy":["oa","material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"（可完整表述纠纷涉及的事实与理由","mode":"multiline","append_paragraph":true}},
+    {"field_id":"patent.plaintiff_standing","label":"原告主体资格、权利取得及许可关系","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"1.原告主体情况","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"patent.number","label":"发明专利号","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"pause","binding":{"table_index":0,"anchor":"专利号：","mode":"text"}},
+    {"field_id":"patent.name","label":"发明专利名称","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"pause","binding":{"table_index":0,"anchor":"专利名称：","mode":"text"}},
+    {"field_id":"patent.field","label":"专利技术领域","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"专利领域：","mode":"text"}},
+    {"field_id":"patent.application_date","label":"专利申请日","value_type":"date","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"专利申请日：","mode":"text"}},
+    {"field_id":"patent.priority_date","label":"专利优先权日","value_type":"date","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"专利优先权日：","mode":"text"}},
+    {"field_id":"patent.grant_date","label":"授权公告日","value_type":"date","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"授权公告日：","mode":"text"}},
+    {"field_id":"patent.asserted_claims","label":"据以主张权利的权利要求序号","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"pause","binding":{"table_index":0,"anchor":"据以主张权利的权利要求序号：","mode":"text"}},
+    {"field_id":"patent.right_status","label":"权利要求效力状态","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"pause","binding":{"table_index":0,"anchor":"据以主张权利的权利要求效力状态：","mode":"text"}},
+    {"field_id":"patent.technical_comparison_summary","label":"技术特征对比分析结论","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"3.技术特征对比分析","mode":"multiline","target_cell_offset":1,"append_paragraph":true}},
+    {"field_id":"patent.accused_product","label":"被诉侵权产品名称及型号","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"pause","binding":{"table_index":0,"anchor":"侵权产品：","mode":"text"}},
+    {"field_id":"patent.infringement_acts","label":"制造、使用、许诺销售、销售、进口等侵权行为","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"侵权行为方式：","mode":"multiline"}},
+    {"field_id":"patent.infringement_period","label":"侵权行为期间","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"侵权行为期间：","mode":"text"}},
+    {"field_id":"patent.discovery","label":"侵权行为发现方式和渠道","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"被诉侵权行为具体情形：","mode":"multiline"}},
+    {"field_id":"patent.joint_infringement","label":"共同侵权事实及主体关联关系","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"5.共同侵权","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"patent.other_facts","label":"其他专利侵权事实","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"blank","binding":{"table_index":0,"anchor":"6.其他","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"patent.stop_infringement_basis","label":"停止侵害的具体主张和事实","value_type":"string","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"1.停止侵害","occurrence":1,"mode":"multiline","target_cell_offset":1}},
+    {"field_id":"patent.compensatory_damages_basis","label":"补偿性赔偿金额、方法和依据","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"补偿性赔偿：","mode":"multiline"}},
+    {"field_id":"patent.punitive_damages_basis","label":"惩罚性赔偿基数、倍数、故意和情节严重事实","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"惩罚性赔偿：","mode":"multiline"}},
+    {"field_id":"patent.reasonable_expenses_basis","label":"维权合理开支及事实依据","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"维权合理开支：","mode":"multiline"}},
+    {"field_id":"patent.joint_liability_basis","label":"连带责任事实和理由","value_type":"string","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"3.连带责任","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"patent.other_liability","label":"其他责任承担方式","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"blank","binding":{"table_index":0,"anchor":"4.其他责任","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"document.legal_basis","label":"法律依据","value_type":"string","required_policy":"required","source_policy":["evidence"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"5.法律依据","mode":"multiline","target_cell_offset":1}},
+    {"field_id":"patent.related_proceedings","label":"专利确权行政程序及关联案件概况","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"confirm","binding":{"table_index":0,"anchor":"有（详见附件3关联案件信息表）","mode":"multiline","append_paragraph":true}},
+    {"field_id":"patent.other_notes","label":"其他需要说明的情况","value_type":"string","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"draft_with_sources","missing_behavior":"blank","binding":{"table_index":0,"anchor":"具体情况：","mode":"multiline","append_paragraph":true}},
+    {"field_id":"document.evidence_list","label":"发明专利案件证据目录","value_type":"list","required_policy":"required","source_policy":["evidence","material","user"],"generation_policy":"draft_with_sources","missing_behavior":"pause","binding":{"table_index":0,"anchor":"1.原告证据","mode":"multiline"}},
+    {"field_id":"patent.independent_claim_features","label":"独立权利要求技术特征对比表","value_type":"list","required_policy":"required","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"pause","binding":{"table_index":2,"anchor":"技术特征A","mode":"multiline"}},
+    {"field_id":"patent.dependent_claim_features","label":"从属权利要求技术特征对比表","value_type":"list","required_policy":"conditional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":3,"anchor":"技术特征H","mode":"multiline"}},
+    {"field_id":"patent.validity_proceedings","label":"专利有效性及行政程序记录","value_type":"list","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":4,"anchor":"第xx号无效宣告请求审查决定","mode":"multiline"}},
+    {"field_id":"patent.related_civil_cases","label":"关联民事案件记录","value_type":"list","required_policy":"optional","source_policy":["material","evidence","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":5,"anchor":"侵害xx专利权纠纷","mode":"multiline"}},
+    {"field_id":"patent.validity_statistics_period","label":"专利有效性程序统计期间","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":4,"anchor":"统计期间：截至","mode":"text"}},
+    {"field_id":"patent.validity_statistics_date","label":"专利有效性程序统计时间","value_type":"date","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":4,"anchor":"统计时间：","mode":"text"}},
+    {"field_id":"patent.civil_statistics_period","label":"关联民事案件统计期间","value_type":"string","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":5,"anchor":"统计期间：截至","mode":"text"}},
+    {"field_id":"patent.civil_statistics_date","label":"关联民事案件统计时间","value_type":"date","required_policy":"optional","source_policy":["material","user"],"generation_policy":"extract_only","missing_behavior":"confirm","binding":{"table_index":5,"anchor":"统计时间：","mode":"text"}}
+  ]
+}

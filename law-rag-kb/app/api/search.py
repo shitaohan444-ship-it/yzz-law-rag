@@ -1,6 +1,7 @@
 """检索 API：POST /search（hybrid 召回 + bge-reranker 精排）。"""
 import json
 import logging
+from datetime import date
 from time import perf_counter
 from typing import Annotated
 
@@ -25,6 +26,20 @@ class SearchRequest(BaseModel):
         max_length=200,
         description="限定在指定 kb_document 范围内检索；最终范围由服务端授权收窄",
     )
+    category_ids: list[PositiveInt] | None = Field(None, max_length=100)
+    knowledge_types: list[str] | None = Field(None, max_length=20)
+    case_id_scope: PositiveInt | None = None
+    effective_on: date | None = None
+    effectivity_status: str | None = Field(None, max_length=20)
+    cause_code: str | None = Field(None, max_length=80)
+    min_score: float | None = Field(None, ge=0, le=1)
+
+
+class OfficialLinkModel(BaseModel):
+    provider: str
+    source_name: str
+    label: str
+    url: str
 
 
 class SearchHitModel(BaseModel):
@@ -43,6 +58,7 @@ class SearchHitModel(BaseModel):
     image_category: str | None = None
     category_id: int | None = None
     category_path: list[str] | None = None
+    official_link: OfficialLinkModel | None = None
 
 
 class SearchResponse(BaseModel):
@@ -64,7 +80,16 @@ def search(
     timings: dict[str, float] | None = (
         {} if settings.search_timing_enabled else None
     )
-    doc_scope = authorized_doc_ids(principal, req.doc_ids)
+    doc_scope = authorized_doc_ids(
+        principal,
+        req.doc_ids,
+        case_id_scope=req.case_id_scope,
+        category_ids=req.category_ids,
+        knowledge_types=req.knowledge_types,
+        effective_on=req.effective_on,
+        effectivity_status=req.effectivity_status,
+        cause_code=req.cause_code,
+    )
     logger.info(
         "rag_search_access user_id=%s requested_docs=%s allowed_docs=%s",
         principal.user_id,
@@ -72,13 +97,14 @@ def search(
         len(doc_scope) if doc_scope is not None else "all",
     )
     hits = (
-        retrieve.search(req.query, doc_ids=doc_scope, top_k=req.top_k)
+        retrieve.search(req.query, doc_ids=doc_scope, top_k=req.top_k, min_score=req.min_score)
         if timings is None
         else retrieve.search(
             req.query,
             doc_ids=doc_scope,
             top_k=req.top_k,
             timings=timings,
+            min_score=req.min_score,
         )
     )
     response_started = perf_counter()
@@ -103,6 +129,7 @@ def search(
                 image_category=h.image_category,
                 category_id=h.category_id,
                 category_path=h.category_path,
+                official_link=h.official_link,
             )
             for index, h in enumerate(hits)
         ],

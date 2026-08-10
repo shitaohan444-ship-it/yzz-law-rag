@@ -44,6 +44,7 @@ export interface KnowledgeDocumentReplaceResponse {
   document: KnowledgeDocumentSummary;
   chunk_count: number;
   replaced: true;
+  request_id: string;
 }
 
 export interface KnowledgeDocumentSource {
@@ -67,6 +68,7 @@ export interface KnowledgeDocumentSourceMutationResponse {
   document: KnowledgeDocumentSummary;
   source: KnowledgeDocumentSource;
   chunk_count: number;
+  request_id: string;
 }
 
 export interface KnowledgeDocumentBatchMoveResponse {
@@ -108,9 +110,11 @@ export interface TrashListResponse {
 export interface KnowledgeDocumentBatchRestoreResponse {
   restored: number;
   doc_ids: string[];
+  request_id: string;
 }
 
 export interface KnowledgeDocumentBatchPurgeResponse {
   purged: number;
   already_purged: number;
+  request_id?: string;
 }

@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         '/api': { target: proxyTarget, changeOrigin: false },
+        '/attachments': { target: proxyTarget, changeOrigin: false },
       },
     },
     preview: {
@@ -22,6 +23,7 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         '/api': { target: proxyTarget, changeOrigin: false },
+        '/attachments': { target: proxyTarget, changeOrigin: false },
       },
     },
     test: {

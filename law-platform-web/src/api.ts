@@ -41,7 +41,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
-async function requestJson<T>(
+export async function requestJson<T>(
   path: string,
   init: RequestInit,
   timeoutMs = CLIENT_TIMEOUT_MS,
@@ -82,6 +82,246 @@ async function requestJson<T>(
   } finally {
     window.clearTimeout(timeout);
   }
+}
+
+export function matchLegalDocumentTemplates(input: {
+  documentType: string;
+  causeCode: string;
+  partyRole: string;
+}): Promise<import('./types').LegalTemplateMatchResponse> {
+  const params = new URLSearchParams({
+    document_type: input.documentType,
+    cause_code: input.causeCode,
+    party_role: input.partyRole,
+  });
+  return requestJson(`/api/legal-document-templates/matches?${params}`, {
+    method: 'GET',
+  });
+}
+
+export function createLegalDraftingRun(input: {
+  case_id: string;
+  actor_id: string;
+  material_ids: string[];
+  evidence_ids: string[];
+  knowledge_document_ids: string[];
+}): Promise<import('./types').LegalDraftingRun> {
+  return postJson('/api/legal-document-generations', {
+    ...input,
+    document_type: 'civil_complaint',
+    cause_code: 'private_lending',
+    party_role: 'plaintiff',
+    fixed_identity: true,
+    idempotency_key: crypto.randomUUID(),
+  });
+}
+
+export function getLegalDraftingRun(
+  runId: string,
+): Promise<import('./types').LegalDraftingRun> {
+  return requestJson(`/api/legal-document-generations/${encodeURIComponent(runId)}`, {
+    method: 'GET',
+  });
+}
+
+export function confirmLegalDraftingTemplate(input: {
+  runId: string;
+  templateVersionId: string;
+  actorId: string;
+}): Promise<import('./types').LegalDraftingRun> {
+  return postJson(
+    `/api/legal-document-generations/${encodeURIComponent(input.runId)}/template-confirmation`,
+    { template_version_id: input.templateVersionId, actor_id: input.actorId },
+  );
+}
+
+export function getLegalDocumentVersions(
+  documentId: string,
+): Promise<import('./types').LegalDocumentVersionResponse> {
+  return requestJson(
+    `/api/legal-documents/${encodeURIComponent(documentId)}/versions`,
+    { method: 'GET' },
+  );
+}
+
+export function submitLegalDraftingInputs(input: {
+  runId: string;
+  actorId: string;
+  inputVersion: number;
+  values: Record<string, string>;
+}): Promise<import('./types').LegalDraftingRun> {
+  return postJson(
+    `/api/legal-document-generations/${encodeURIComponent(input.runId)}/inputs`,
+    {
+      actor_id: input.actorId,
+      input_version: input.inputVersion,
+      inputs: Object.entries(input.values).map(([field_id, value]) => ({
+        field_id,
+        value,
+        resolution_type: 'confirmed',
+        source_note: '律师在人工补充页面确认',
+      })),
+    },
+  );
+}
+
+export function cancelLegalDraftingRun(
+  runId: string,
+  actorId: string,
+): Promise<import('./types').LegalDraftingRun> {
+  return postJson(
+    `/api/legal-document-generations/${encodeURIComponent(runId)}/cancel`,
+    { actor_id: actorId },
+  );
+}
+
+export function resumeLegalDraftingRun(
+  runId: string,
+  actorId: string,
+): Promise<import('./types').LegalDraftingRun> {
+  return postJson(
+    `/api/legal-document-generations/${encodeURIComponent(runId)}/resume`,
+    { actor_id: actorId },
+  );
+}
+
+export function reviewLegalDocumentVersion(input: {
+  documentId: string;
+  versionId: string;
+  actorId: string;
+  action: 'approved' | 'returned';
+  comment?: string;
+}): Promise<{ ok: boolean; status: string }> {
+  return postJson(
+    `/api/legal-documents/${encodeURIComponent(input.documentId)}/versions/${encodeURIComponent(input.versionId)}/review`,
+    {
+      actor_id: input.actorId,
+      action: input.action,
+      comment: input.comment,
+    },
+  );
+}
+
+export function createDraftingLiteJob(
+  files: File[],
+  cause: string,
+  knowledgeDocumentIds: string[] = [],
+): Promise<import('./types').DraftingLiteJob> {
+  const body = new FormData();
+  files.forEach((file) => body.append('files', file));
+  body.append('cause', cause);
+  body.append('knowledge_document_ids', JSON.stringify(knowledgeDocumentIds));
+  return requestJson('/api/drafting-lite/jobs', {
+    method: 'POST',
+    body,
+  }, 900_000);
+}
+
+export function listDraftingLiteCauses(): Promise<{
+  items: import('./types').DraftingLiteCause[];
+}> {
+  return requestJson('/api/drafting-lite/causes', { method: 'GET' });
+}
+
+export function listDraftingLiteMaterials(input: {
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+  caseStatus?: 'all' | 'open' | 'closed';
+} = {}): Promise<import('./types').DraftingLiteMaterialList> {
+  const params = new URLSearchParams({
+    keyword: input.keyword ?? '',
+    page: String(input.page ?? 1),
+    page_size: String(input.pageSize ?? 10),
+    case_status: input.caseStatus ?? 'all',
+  });
+  return requestJson(`/api/drafting-lite/materials?${params}`, {
+    method: 'GET',
+  });
+}
+
+export function getDraftingLiteJob(
+  jobId: string,
+): Promise<import('./types').DraftingLiteJob> {
+  return requestJson(`/api/drafting-lite/jobs/${encodeURIComponent(jobId)}`, {
+    method: 'GET',
+  });
+}
+
+export function cancelDraftingLiteJob(
+  jobId: string,
+): Promise<import('./types').DraftingLiteJob> {
+  return postJson(
+    `/api/drafting-lite/jobs/${encodeURIComponent(jobId)}/cancel`,
+    {},
+  );
+}
+
+export function selectDraftingLiteCause(
+  jobId: string,
+  cause: string,
+): Promise<import('./types').DraftingLiteJob> {
+  return postJson(
+    `/api/drafting-lite/jobs/${encodeURIComponent(jobId)}/cause`,
+    { cause },
+  );
+}
+
+export function confirmDraftingLiteParties(input: {
+  jobId: string;
+  version: number;
+  parties: import('./types').PartyRecord[];
+}): Promise<import('./types').DraftingLiteJob> {
+  return postJson(
+    `/api/drafting-lite/jobs/${encodeURIComponent(input.jobId)}/parties`,
+    {
+      version: input.version,
+      parties: input.parties,
+      confirmed: true,
+    },
+  );
+}
+
+export async function downloadDraftingLiteDocument(
+  jobId: string,
+): Promise<{ blob: Blob; filename: string }> {
+  return downloadDraftingLiteArtifact(jobId, 'complaint', true);
+}
+
+export async function downloadDraftingLiteArtifact(
+  jobId: string,
+  artifactType: 'complaint' | 'evidence_directory' | 'evidence_package',
+  legacyComplaintRoute = false,
+): Promise<{ blob: Blob; filename: string }> {
+  const endpoint = legacyComplaintRoute && artifactType === 'complaint'
+    ? `/api/drafting-lite/jobs/${encodeURIComponent(jobId)}/download`
+    : `/api/drafting-lite/jobs/${encodeURIComponent(jobId)}/artifacts/${encodeURIComponent(artifactType)}/download`;
+  const response = await fetch(
+    endpoint,
+  );
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as GatewayError | null;
+    throw new ApiError(
+      payload && typeof payload.message === 'string'
+        ? payload.message
+        : '文书下载失败，请稍后重试',
+      response.status,
+    );
+  }
+  const disposition = response.headers.get('content-disposition') ?? '';
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  const plain = /filename="?([^";]+)"?/i.exec(disposition)?.[1];
+  let filename = artifactType === 'complaint'
+    ? '要素式起诉状.docx'
+    : artifactType === 'evidence_package'
+      ? '证据材料包.zip'
+      : '证据目录.docx';
+  try {
+    filename = encoded ? decodeURIComponent(encoded) : plain || filename;
+  } catch {
+    filename = plain || filename;
+  }
+  return { blob: await response.blob(), filename };
 }
 
 export function searchRag(query: string, topK: number): Promise<SearchResponse> {

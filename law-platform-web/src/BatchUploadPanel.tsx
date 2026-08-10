@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ApiError,
   batchMoveKnowledgeDocuments,
@@ -7,7 +7,16 @@ import {
   uploadKnowledgeDocument,
 } from './api';
 import CategoryCascadeSelect from './CategoryCascadeSelect';
+import {
+  countdownLabel,
+  durationLabel,
+  FAILURE_DELAY_OPTIONS,
+  failureDelayLabel,
+  loadFailureDelay,
+  saveFailureDelay,
+} from './batchUploadUtils';
 import { findCategory } from './knowledgeCategories';
+import { useUploadActivity } from './UploadActivityContext';
 import type { KnowledgeCategoryNode, KnowledgeDocument } from './types';
 
 const MAX_FILES = 500;
@@ -70,19 +79,6 @@ function sizeLabel(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function durationLabel(milliseconds: number): string {
-  if (milliseconds < 1000) return `${Math.round(milliseconds)} 毫秒`;
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours}小时`);
-  if (minutes > 0) parts.push(`${minutes}分钟`);
-  if (seconds > 0) parts.push(`${seconds}秒`);
-  return parts.length > 0 ? parts.join('') : '0秒';
-}
-
 function dateTimeLabel(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '未知时间';
@@ -134,12 +130,49 @@ export default function BatchUploadPanel({
   const [error, setError] = useState('');
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [failureDelayMs, setFailureDelayMs] = useState(loadFailureDelay);
+  const [failureWait, setFailureWait] = useState<{ title: string; remainingMs: number } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const control = useRef({ paused: false, stopped: false });
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveCategoryId, setMoveCategoryId] = useState('');
   const [moveSaving, setMoveSaving] = useState(false);
   const [moveNotice, setMoveNotice] = useState('');
+  const { reportActivity } = useUploadActivity();
+
+  // 计算队列状态摘要
+  const activeCount = useMemo(
+    () => items.filter((i) => i.status === 'uploading' || i.status === 'ingesting' || i.status === 'registered').length,
+    [items],
+  );
+  const doneCount = useMemo(
+    () => items.filter((i) => i.status === 'success' || i.status === 'existing').length,
+    [items],
+  );
+  const totalCount = items.filter((i) => i.status !== 'invalid').length;
+
+  // 构建进度文字并上报
+  const buildProgressText = useCallback((): string => {
+    if (!running) return '';
+    if (totalCount > 0 && doneCount > 0 && activeCount >= 0) {
+      return `批量导入 ${doneCount}/${totalCount} 份已完成${activeCount > 0 ? `，${activeCount} 份处理中` : ''}`;
+    }
+    if (activeCount > 0) return `${activeCount} 份文件处理中…`;
+    return '';
+  }, [running, totalCount, doneCount, activeCount]);
+
+  useEffect(() => {
+    if (!running) {
+      reportActivity({ busy: false, activeCount: 0, progressText: '' });
+      return;
+    }
+    reportActivity({
+      busy: true,
+      activeCount,
+      progressText: buildProgressText(),
+    });
+  }, [running, activeCount, buildProgressText, reportActivity]);
 
   function updateItems(updater: (current: BatchItem[]) => BatchItem[]) {
     setItems((current) => {
@@ -168,10 +201,41 @@ export default function BatchUploadPanel({
     return () => window.clearInterval(timer);
   }, [running, startedAt]);
 
+  // 自动滚动到当前处理的条目
+  useEffect(() => {
+    if (activeIndex === null) return;
+    const row = document.querySelector<HTMLElement>(
+      `.batch-file-list [data-batch-index="${activeIndex}"]`,
+    );
+    if (row) {
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [activeIndex]);
+
   async function waitWhilePaused(): Promise<boolean> {
     while (control.current.paused && !control.current.stopped) {
       await new Promise((resolve) => window.setTimeout(resolve, 200));
     }
+    return !control.current.stopped;
+  }
+
+  // 失败后等待 delayMs 再处理下一个；期间实时更新倒计时，并响应“停止/暂停”。
+  // 返回 true 表示应继续处理后续任务，false 表示已被停止。
+  async function waitAfterFailure(title: string, delayMs: number): Promise<boolean> {
+    const deadline = Date.now() + delayMs;
+    for (;;) {
+      if (control.current.stopped) {
+        setFailureWait(null);
+        return false;
+      }
+      if (!control.current.paused) {
+        const remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) break;
+        setFailureWait({ title, remainingMs });
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    }
+    setFailureWait(null);
     return !control.current.stopped;
   }
 
@@ -203,6 +267,7 @@ export default function BatchUploadPanel({
       if (!shouldProcess) continue;
       if (!(await waitWhilePaused())) break;
       item = itemsRef.current[index];
+      setActiveIndex(index);
       try {
         let document = item.document;
         if (!document || item.failedPhase !== 'ingest') {
@@ -241,10 +306,13 @@ export default function BatchUploadPanel({
           control.current.stopped = true;
           setError('所选分类已停用，请重新选择。');
           await onCategoryInvalid();
-        } else if (isConnectivityError(itemError)) {
-          control.current.paused = true;
-          setPaused(true);
-          setError('平台连接中断，批量队列已暂停；服务恢复后点击“继续”。');
+        } else {
+          setError(
+            isConnectivityError(itemError)
+              ? `平台连接中断，将在${failureDelayLabel(failureDelayMs)}后自动尝试处理下一份文件。`
+              : '',
+          );
+          if (!(await waitAfterFailure(item.title, failureDelayMs))) break;
         }
       }
     }
@@ -258,6 +326,7 @@ export default function BatchUploadPanel({
     }
     setRunning(false);
     setPaused(false);
+    setActiveIndex(null);
     control.current.paused = false;
     await onDocumentsChanged();
   }
@@ -283,6 +352,7 @@ export default function BatchUploadPanel({
     });
     itemsRef.current = next;
     setItems(next);
+    setActiveIndex(null);
     setError('');
     setStartedAt(null);
     setElapsedMs(0);
@@ -375,11 +445,32 @@ export default function BatchUploadPanel({
         emptyLabel="请选择一级分类"
         className="upload-category-cascade"
       />
+      <label className="failure-delay-setting">
+        <span>处理失败后等待</span>
+        <select
+          aria-label="处理失败后等待时间"
+          value={failureDelayMs}
+          disabled={disabled || running}
+          onChange={(event) => {
+            const next = saveFailureDelay(Number(event.target.value));
+            setFailureDelayMs(next);
+          }}
+        >
+          {FAILURE_DELAY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <small>等待结束后自动处理下一份文件；默认 2 分钟。</small>
+      </label>
 
       {items.length > 0 && (
         <div className="batch-file-list">
           {items.map((item, index) => (
-            <article className="batch-file-row" key={item.key}>
+            <article
+              className={`batch-file-row${index === activeIndex ? ' is-processing' : ''}`}
+              key={item.key}
+              data-batch-index={index}
+            >
               <div className="batch-file-index">{index + 1}</div>
               <div className="batch-file-main">
                 <h4>{item.document?.title ?? item.title}</h4>
@@ -420,6 +511,11 @@ export default function BatchUploadPanel({
         <span>停止 {count('stopped')}</span>
         <span>总耗时 {durationLabel(elapsedMs)}</span>
       </div>
+      {failureWait && (
+        <div className="loading-card" role="status">
+          《{failureWait.title}》处理失败，{countdownLabel(failureWait.remainingMs)} 后自动处理下一个；可点击“暂停”或“停止后续任务”中断等待。
+        </div>
+      )}
       {error && <div className="error-card" role="alert">{error}</div>}
       <div className="upload-button-group batch-controls">
         <button

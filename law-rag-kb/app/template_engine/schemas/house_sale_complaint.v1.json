@@ -1,0 +1,978 @@
+{
+  "schema_id": "civil_complaint.house_sale.v1",
+  "version": "1.0.0",
+  "template_code": "civil_complaint.house_sale",
+  "document_type": "civil_complaint",
+  "cause_code": "house_sale",
+  "party_role": "plaintiff",
+  "source_path": "起诉状/要素式房屋买卖合同纠纷起诉状.docx",
+  "parser_version": "template-compiler-v1",
+  "sections": [
+    "parties",
+    "claims",
+    "jurisdiction",
+    "facts",
+    "authorities",
+    "evidence"
+  ],
+  "metadata": {
+    "evidence_directory": {"version": "evidence_directory.v1", "enabled": true, "source_field": "document.evidence_list", "inline_mode": "blank", "artifact_type": "evidence_directory"},
+    "signature_policy": "user_only",
+    "mediation_policy": "user_only",
+    "party_layout": {"version": "party.v1", "supported_roles": ["plaintiff", "defendant"], "max_per_role": 1, "entity_types_by_role": {"plaintiff": ["natural_person", "organization"], "defendant": ["natural_person", "organization"]}},
+    "request_basis": {
+      "version": "request_basis.v1",
+      "placement": "standalone",
+      "target_field": "document.legal_basis",
+      "claim_fields": ["document.claims"],
+      "fact_fields": "verified_non_party",
+      "contractual_basis": {
+        "target_field": "document.contractual_basis",
+        "fact_fields": ["house_sale.contract.summary", "house_sale.payment.summary", "house_sale.delivery.summary", "house_sale.registration.summary"]
+      }
+    }
+  },
+  "fields": [
+    {
+      "field_id": "party.plaintiff.name",
+      "label": "原告姓名",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "姓名：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.gender",
+      "label": "原告性别",
+      "value_type": "enum",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "性别：",
+        "occurrence": 0,
+        "mode": "checkbox"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.birth_date",
+      "label": "原告出生日期",
+      "value_type": "date",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "出生日期：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.ethnicity",
+      "label": "原告民族",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "民族：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.id_type",
+      "label": "原告证件类型",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件类型：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.id_number",
+      "label": "原告证件号码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件号码：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.phone",
+      "label": "原告联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.address",
+      "label": "原告住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（户籍所在地）：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.current_address",
+      "label": "原告经常居住地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "经常居住地：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.organization_name",
+      "label": "原告单位名称",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "名称：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.organization_address",
+      "label": "原告单位住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（主要办事机构所在地）：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.organization_registration_address",
+      "label": "原告单位注册地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "注册地",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.legal_representative",
+      "label": "原告法定代表人",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "法定代表人/主要负责人：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.organization_phone",
+      "label": "原告单位联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.unified_social_credit_code",
+      "label": "原告统一社会信用代码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "统一社会信用代码：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.name",
+      "label": "被告姓名",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "姓名：",
+        "occurrence": 2,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.gender",
+      "label": "被告性别",
+      "value_type": "enum",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "性别：",
+        "occurrence": 1,
+        "mode": "checkbox"
+      }
+    },
+    {
+      "field_id": "party.defendant.birth_date",
+      "label": "被告出生日期",
+      "value_type": "date",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "出生日期：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.ethnicity",
+      "label": "被告民族",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "民族：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.id_type",
+      "label": "被告证件类型",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件类型：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.id_number",
+      "label": "被告证件号码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件号码：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.phone",
+      "label": "被告联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 2,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.address",
+      "label": "被告住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（户籍所在地）：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.current_address",
+      "label": "被告经常居住地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "经常居住地：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.organization_name",
+      "label": "被告单位名称",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "名称：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.organization_address",
+      "label": "被告单位住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（主要办事机构所在地）：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.organization_registration_address",
+      "label": "被告单位注册地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "注册地",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.legal_representative",
+      "label": "被告法定代表人",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "法定代表人/主要负责人：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.organization_phone",
+      "label": "被告单位联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 3,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.unified_social_credit_code",
+      "label": "被告统一社会信用代码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "统一社会信用代码：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "document.claims",
+      "label": "完整诉讼请求",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "可完整表述诉讼请求",
+        "occurrence": 0,
+        "mode": "multiline",
+        "append_paragraph": true
+      }
+    },
+    {
+      "field_id": "house_sale.contract_relation",
+      "label": "确定房屋买卖合同关系",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "1.确定房屋买卖合同关系",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.payment",
+      "label": "支付或返还购房款",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "2.支付或返还购房款",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.delivery",
+      "label": "交付或返还房屋",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "3.交付或返还房屋",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.registration",
+      "label": "办理房屋登记手续",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "4.办理房屋登记手续",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.agency_fee",
+      "label": "返还或承担中介服务费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "5.返还或承担中介服务费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.quality_damage",
+      "label": "房屋质量损害赔偿",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "6.房屋质量损害赔偿",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.loan_discharge",
+      "label": "解除担保贷款",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "7.解除担保贷款",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.appraisal_fee",
+      "label": "鉴定及其他实现债权的费用",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "8.鉴定及其他实现债权的费用",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.other",
+      "label": "其他请求",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "10.其他请求",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.total_amount",
+      "label": "标的总额",
+      "value_type": "money",
+      "required_policy": "computed",
+      "source_policy": [
+        "computed"
+      ],
+      "generation_policy": "compute_only",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "11.标的总额",
+        "occurrence": 0,
+        "mode": "text",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "jurisdiction.agreement",
+      "label": "管辖约定",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "binding": {
+        "table_index": 0,
+        "anchor": "合同条款及内容：",
+        "occurrence": 0,
+        "mode": "multiline"
+      }
+    },
+    {
+      "field_id": "house_sale.contract.summary",
+      "label": "房屋买卖合同基本情况",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "1.涉及房屋买卖合同关系的基本情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.payment.summary",
+      "label": "购房款支付情况",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "2.购房款支付情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.delivery.summary",
+      "label": "房屋交付情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "3.房屋交付情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.registration.summary",
+      "label": "房屋登记手续办理情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "4.房屋登记手续办理情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.agency_fee.summary",
+      "label": "中介服务费情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "5.中介服务费情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "house_sale.quality.summary",
+      "label": "质量损害赔偿相关情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "6.质量损害赔偿相关情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "document.facts_and_reasons",
+      "label": "事实与理由",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "可完整表述纠纷涉及的事实与理由",
+        "occurrence": 0,
+        "mode": "multiline",
+        "append_paragraph": true
+      }
+    },
+    {
+      "field_id": "document.contractual_basis",
+      "label": "合同约定依据",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material",
+        "user"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "合同约定：",
+        "occurrence": 0,
+        "mode": "multiline"
+      }
+    },
+    {
+      "field_id": "document.legal_basis",
+      "label": "法律依据",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "9.请求依据",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "document.evidence_list",
+      "label": "证据清单",
+      "value_type": "list",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "10.证据清单",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    }
+  ]
+}

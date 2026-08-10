@@ -19,7 +19,7 @@ export default function TrashManagementPage() {
       </header>
 
       <main className="workspace">
-        <AppNavigation active="trash" />
+        <AppNavigation active="trash" onSelect={() => {}} />
         <TrashPage />
       </main>
 

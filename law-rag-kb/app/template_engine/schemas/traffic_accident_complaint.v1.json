@@ -1,0 +1,949 @@
+{
+  "schema_id": "civil_complaint.traffic_accident.v1",
+  "version": "1.0.0",
+  "template_code": "civil_complaint.traffic_accident",
+  "document_type": "civil_complaint",
+  "cause_code": "traffic_accident",
+  "party_role": "plaintiff",
+  "source_path": "起诉状/要素式机动车交通事故责任纠纷起诉状.docx",
+  "parser_version": "template-compiler-v1",
+  "sections": [
+    "parties",
+    "claims",
+    "facts",
+    "authorities",
+    "evidence"
+  ],
+  "metadata": {
+    "evidence_directory": {"version": "evidence_directory.v1", "enabled": true, "source_field": "document.evidence_list", "inline_mode": "blank", "artifact_type": "evidence_directory"},
+    "signature_policy": "user_only",
+    "mediation_policy": "user_only",
+    "party_layout": {"version": "party.v1", "supported_roles": ["plaintiff", "defendant"], "max_per_role": 1, "entity_types_by_role": {"plaintiff": ["natural_person"], "defendant": ["natural_person", "organization"]}},
+    "request_basis": {
+      "version": "request_basis.v1",
+      "placement": "standalone",
+      "target_field": "document.legal_basis",
+      "claim_fields": ["document.claims"],
+      "fact_fields": "verified_non_party"
+    }
+  },
+  "fields": [
+    {
+      "field_id": "party.plaintiff.name",
+      "label": "原告姓名",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "姓名：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.gender",
+      "label": "原告性别",
+      "value_type": "enum",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "性别：",
+        "occurrence": 0,
+        "mode": "checkbox"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.birth_date",
+      "label": "原告出生日期",
+      "value_type": "date",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "出生日期：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.ethnicity",
+      "label": "原告民族",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "民族：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.id_type",
+      "label": "原告证件类型",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件类型：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.id_number",
+      "label": "原告证件号码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件号码：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.phone",
+      "label": "原告联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.address",
+      "label": "原告住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（户籍所在地）：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.current_address",
+      "label": "原告经常居住地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "经常居住地：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.organization_name",
+      "label": "原告单位名称",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "名称：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.organization_address",
+      "label": "原告单位住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（主要办事机构所在地）：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.organization_registration_address",
+      "label": "原告单位注册地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "注册地 / 登记地：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.legal_representative",
+      "label": "原告法定代表人",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "法定代表人 / 负责人：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.organization_phone",
+      "label": "原告单位联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.plaintiff.unified_social_credit_code",
+      "label": "原告统一社会信用代码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "统一社会信用代码：",
+        "occurrence": 0,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.name",
+      "label": "被告姓名",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "姓名：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.gender",
+      "label": "被告性别",
+      "value_type": "enum",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "性别：",
+        "occurrence": 1,
+        "mode": "checkbox"
+      }
+    },
+    {
+      "field_id": "party.defendant.birth_date",
+      "label": "被告出生日期",
+      "value_type": "date",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "出生日期：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.ethnicity",
+      "label": "被告民族",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "民族：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.id_type",
+      "label": "被告证件类型",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件类型：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.id_number",
+      "label": "被告证件号码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "证件号码：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.phone",
+      "label": "被告联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 2,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.address",
+      "label": "被告住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（户籍所在地）：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.current_address",
+      "label": "被告经常居住地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "经常居住地：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.organization_name",
+      "label": "被告单位名称",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "名称：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.organization_address",
+      "label": "被告单位住所地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "住所地（主要办事机构所在地）：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.organization_registration_address",
+      "label": "被告单位注册地",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "注册地 / 登记地：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.legal_representative",
+      "label": "被告法定代表人",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "personal",
+      "binding": {
+        "table_index": 0,
+        "anchor": "法定代表人 / 负责人：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.organization_phone",
+      "label": "被告单位联系电话",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "blank",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "联系电话：",
+        "occurrence": 3,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "party.defendant.unified_social_credit_code",
+      "label": "被告统一社会信用代码",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "extract_only",
+      "missing_behavior": "confirm",
+      "sensitivity": "sensitive",
+      "binding": {
+        "table_index": 0,
+        "anchor": "统一社会信用代码：",
+        "occurrence": 1,
+        "mode": "text"
+      }
+    },
+    {
+      "field_id": "document.claims",
+      "label": "完整诉讼请求",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "可完整表述诉讼请求",
+        "occurrence": 0,
+        "mode": "multiline",
+        "append_paragraph": true
+      }
+    },
+    {
+      "field_id": "claims.medical_expense",
+      "label": "医疗费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "1. 医疗费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.nursing_expense",
+      "label": "护理费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "2. 护理费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.nutrition_expense",
+      "label": "营养费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "3. 营养费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.hospitalization_meal_allowance",
+      "label": "住院伙食补助费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "4. 住院伙食补助费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.lost_wages",
+      "label": "误工费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "5. 误工费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.transportation_expense",
+      "label": "交通费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "6. 交通费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.disability_compensation",
+      "label": "残疾赔偿金",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "7. 残疾赔偿金",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.disability_aid_expense",
+      "label": "残疾辅助器具费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "8. 残疾辅助器具费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.death_compensation",
+      "label": "死亡赔偿金、丧葬费",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "9. 死亡赔偿金、丧葬费",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.mental_distress_solatium",
+      "label": "精神损害抚慰金",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "10. 精神损害抚慰金",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.property_loss",
+      "label": "财产损失",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "11. 财产损失",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.other",
+      "label": "其他费用",
+      "value_type": "string",
+      "required_policy": "optional",
+      "source_policy": [
+        "material"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "12. 其他费用",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "claims.total_amount",
+      "label": "标的总额",
+      "value_type": "money",
+      "required_policy": "computed",
+      "source_policy": [
+        "computed"
+      ],
+      "generation_policy": "compute_only",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "13. 标的总额",
+        "occurrence": 0,
+        "mode": "text",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "traffic.accident.summary",
+      "label": "交通事故发生情况",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "1. 交通事故发生情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "traffic.liability.summary",
+      "label": "交通事故责任认定",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "2. 交通事故责任认定",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "traffic.insurance.summary",
+      "label": "机动车投保情况",
+      "value_type": "string",
+      "required_policy": "conditional",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "3. 机动车投保情况",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "document.facts_and_reasons",
+      "label": "事实与理由",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "可完整表述纠纷涉及的事实与理由",
+        "occurrence": 0,
+        "mode": "multiline",
+        "append_paragraph": true
+      }
+    },
+    {
+      "field_id": "document.legal_basis",
+      "label": "法律依据",
+      "value_type": "string",
+      "required_policy": "required",
+      "source_policy": [
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "4. 请求依据",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    },
+    {
+      "field_id": "document.evidence_list",
+      "label": "证据清单",
+      "value_type": "list",
+      "required_policy": "required",
+      "source_policy": [
+        "material",
+        "evidence"
+      ],
+      "generation_policy": "draft_with_sources",
+      "missing_behavior": "blank",
+      "binding": {
+        "table_index": 0,
+        "anchor": "5. 证据清单",
+        "occurrence": 0,
+        "mode": "multiline",
+        "target_cell_offset": 1
+      }
+    }
+  ]
+}

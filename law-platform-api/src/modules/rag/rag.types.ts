@@ -1,3 +1,10 @@
+export interface RagOfficialLink {
+  provider: 'npc_flk';
+  source_name: '国家法律法规数据库';
+  label: '官网最新版';
+  url: string;
+}
+
 export interface RagHit {
   chunk_id: string;
   doc_id: number;
@@ -14,6 +21,7 @@ export interface RagHit {
   image_category?: string | null;
   category_id?: number | null;
   category_path?: string[] | null;
+  official_link?: RagOfficialLink | null;
 }
 
 export interface RagSearchResponse {
@@ -43,6 +51,8 @@ export interface RagIngestResponse {
   image_filtered: number;
   vl_status: string;
   message: string;
+  error_code?: string | null;
+  request_id: string;
   upload_timings: RagProcessingTimings | null;
   ingest_timings: RagProcessingTimings | null;
 }
@@ -71,6 +81,8 @@ export interface RagDocumentStatus {
   image_kept: number;
   image_filtered: number;
   vl_processed_at: string | null;
+  error_code?: string | null;
+  request_id: string;
   upload_timings: RagProcessingTimings | null;
   ingest_timings: RagProcessingTimings | null;
 }
@@ -81,6 +93,7 @@ export interface RagDocumentMarkdown {
   description_summary: string | null;
   image_count: number;
   markdown: string;
+  request_id: string;
 }
 
 export interface RagDocumentChunk {
@@ -104,6 +117,7 @@ export interface RagDocumentChunks {
   page: number;
   page_size: number;
   items: RagDocumentChunk[];
+  request_id: string;
 }
 
 export interface RagSourcePromotionResponse {
@@ -113,6 +127,7 @@ export interface RagSourcePromotionResponse {
   source_chunk_count: number;
   chunk_count: number;
   image_total: number;
+  request_id: string;
   upload_timings: RagProcessingTimings | null;
   ingest_timings: RagProcessingTimings | null;
 }
@@ -126,4 +141,5 @@ export interface RagVerifyRestoreItem {
 
 export interface RagVerifyRestoreResponse {
   items: RagVerifyRestoreItem[];
+  request_id: string;
 }

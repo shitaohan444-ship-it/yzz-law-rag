@@ -37,7 +37,7 @@ class _StubLLM:
 
     _REF_RE = re.compile(r"^\[(\d+)\]\s+(.*)$")
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, *, max_tokens: int | None = None) -> str:
         refs: list[tuple[str, str]] = []
         question = ""
         for line in prompt.splitlines():
@@ -70,7 +70,14 @@ class _StubLLM:
         return "\n".join(lines)
 
 
-def _call_openai_compat(base_url: str, api_key: str, model: str, prompt: str) -> str:
+def _call_openai_compat(
+    base_url: str,
+    api_key: str,
+    model: str,
+    prompt: str,
+    *,
+    max_tokens: int | None = None,
+) -> str:
     """共用：带超时/重试/输出限制的 OpenAI 兼容 Chat Completions 调用。"""
     try:
         from openai import OpenAI
@@ -88,7 +95,7 @@ def _call_openai_compat(base_url: str, api_key: str, model: str, prompt: str) ->
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": settings.llm_temperature,
-        "max_tokens": settings.llm_max_tokens,
+        "max_tokens": max_tokens or settings.llm_max_tokens,
     }
     if settings.llm_enable_thinking is not None:
         # 百炼 Qwen3.x 的非 OpenAI 标准扩展参数；其它兼容服务默认不发送。
@@ -110,21 +117,27 @@ def _call_openai_compat(base_url: str, api_key: str, model: str, prompt: str) ->
 class _OpenAILLM:
     """OpenAI 兼容 API（DeepSeek/智谱/通义/OpenAI）。"""
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, *, max_tokens: int | None = None) -> str:
         if not (settings.llm_api_base and settings.llm_api_key and settings.llm_model):
             raise LLMServiceError(
                 "LLM_PROVIDER=openai 需配置 LLM_API_BASE / LLM_API_KEY / LLM_MODEL"
             )
         return _call_openai_compat(
-            settings.llm_api_base, settings.llm_api_key, settings.llm_model, prompt
+            settings.llm_api_base,
+            settings.llm_api_key,
+            settings.llm_model,
+            prompt,
+            max_tokens=max_tokens,
         )
 
 
 class _OllamaLLM:
     """本地 Ollama（OpenAI 兼容端点 :11434/v1）。"""
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, *, max_tokens: int | None = None) -> str:
         if not settings.llm_model:
             raise LLMServiceError("LLM_PROVIDER=ollama 需配置 LLM_MODEL（如 qwen2.5:7b）")
         base = settings.llm_api_base or "http://localhost:11434/v1"
-        return _call_openai_compat(base, "ollama", settings.llm_model, prompt)
+        return _call_openai_compat(
+            base, "ollama", settings.llm_model, prompt, max_tokens=max_tokens
+        )
